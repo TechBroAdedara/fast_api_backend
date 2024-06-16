@@ -14,7 +14,7 @@ class GeofenceCreate(BaseModel):
     latitude: float
     longitude: float
     radius: float
-    fenceType: str
+    fence_type: str
     start_time: datetime
     end_time: datetime
 
