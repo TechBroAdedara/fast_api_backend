@@ -1,5 +1,3 @@
 fastapi-env/
-.vscode/
-
-models.py
-*.db
+.vscode
+__pycache__/

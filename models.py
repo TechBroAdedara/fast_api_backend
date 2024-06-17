@@ -6,12 +6,14 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+
 class User(Base):
     __tablename__ = "Users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     role = Column(String)  # 'admin' or 'student'
+
 
 class Geofence(Base):
     __tablename__ = "Geofences"
@@ -20,11 +22,11 @@ class Geofence(Base):
     latitude = Column(Float)
     longitude = Column(Float)
     radius = Column(Float)
-    fenceType= Column(String)
+    fenceType = Column(String)
     start_time = Column(DateTime)
     end_time = Column(DateTime)
 
-    
+
 class AttendanceRecord(Base):
     __tablename__ = "Attendance_Records"
     id = Column(Integer, primary_key=True, index=True)
