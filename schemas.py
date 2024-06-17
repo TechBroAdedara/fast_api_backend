@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     password: str
     role: str
 
+
 class GeofenceCreate(BaseModel):
     name: str
     latitude: float
@@ -17,4 +18,3 @@ class GeofenceCreate(BaseModel):
     fence_type: str
     start_time: datetime
     end_time: datetime
-
