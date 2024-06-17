@@ -75,12 +75,6 @@ student_dependency = Annotated[dict, Depends(get_current_student_user)]
 def index():
     return "Hello! Access our documentation by adding '/docs' to the url above"
 
-@app.get("/test", status_code=status.HTTP_200_OK)
-async def user(user:admin_dependency):
-    if user is None:
-        raise HTTPException(status_code=401, detail="Authentication Failed")
-    
-    return {"User": user}
 
 # Endpoint to get the list of users
 @app.get("/get_users")
