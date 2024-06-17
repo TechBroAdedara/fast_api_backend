@@ -1,4 +1,5 @@
 fastapi-env/
 .vscode/
 
+models.py
 *.db
