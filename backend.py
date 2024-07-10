@@ -3,6 +3,8 @@ import math
 import random
 import string
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 from typing import Annotated, Generator, List, Tuple
 
 import mysql.connector
@@ -17,7 +19,9 @@ import auth
 from auth import get_current_admin_user, get_current_student_user, get_current_user
 from schemas import GeofenceCreate
 
-
+if os.getenv('ENVIRONMENT') == 'development':
+    load_dotenv()
+    
 # ----------------------------------------Geolocation Logic/Algorithm--------------------------------------------
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371  # Earth radius in km
@@ -55,10 +59,10 @@ app.include_router(auth.router)
 # ----------------------------------------Dependency--------------------------------------------
 def get_db() -> Generator:
     db = mysql.connector.connect(
-        host="sql8.freesqldatabase.com", 
-        user="sql8719091", 
-        passwd="95rPXTvw4H", 
-        database="sql8719091"
+        host= os.getenv("DB_HOST"), 
+        user=os.getenv("DB_USER"), 
+        passwd=os.getenv("DB_PSWORD"), 
+        database=os.getenv("DB_DB")
     )
     try:
         cursor = db.cursor(dictionary=True)  # Use dictionary cursor for better readability
