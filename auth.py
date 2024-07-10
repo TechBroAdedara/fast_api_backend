@@ -43,9 +43,9 @@ class TokenData(BaseModel):
 def get_db():
     db = mysql.connector.connect(
         host="sql8.freesqldatabase.com",
-        user="sql8714187",
-        passwd="CIng3QVDUe",
-        database="sql8714187",
+        user="sql8719091",
+        passwd="95rPXTvw4H",
+        database="sql8719091",
     )
     try:
         cursor = db.cursor(
