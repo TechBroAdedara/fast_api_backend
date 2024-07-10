@@ -14,7 +14,7 @@ from mysql.connector.cursor import MySQLCursorDict
 from passlib.context import CryptContext
 
 import auth
-from auth import get_current_admin_user, get_current_student_user
+from auth import get_current_admin_user, get_current_student_user, get_current_user
 from schemas import GeofenceCreate
 
 
@@ -70,6 +70,7 @@ def get_db() -> Generator:
 db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
 admin_dependency = Annotated[dict, Depends(get_current_admin_user)]
 student_dependency = Annotated[dict, Depends(get_current_student_user)]
+general_user = Annotated[dict, Depends(get_current_user)]
 # ----------------------------------------Routes--------------------------------------------
 @app.get("/")
 def index():
@@ -78,9 +79,9 @@ def index():
 
 # Endpoint to get the list of users
 @app.get("/get_users")
-def get_users(db_tuple:db_dependency, user: admin_dependency):
-    if user is None:
-        raise HTTPException(status_code=401, detail = "Authentication Failed")
+def get_users(db_tuple:db_dependency):
+    #if user is None:
+    #   raise HTTPException(status_code=401, detail = "Authentication Failed")
     
     db, cursor = db_tuple
     cursor.execute("SELECT user_matric, username, role FROM Users")
@@ -89,10 +90,10 @@ def get_users(db_tuple:db_dependency, user: admin_dependency):
 
 # Endpoint to create Geofence
 @app.post("/geofences/")
-def create_geofence(geofence: GeofenceCreate, user:admin_dependency, db_tuple = Depends(get_db)):
+def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
     db, cursor = db_tuple   
-    if user is None:
-        raise HTTPException(status_code=401, detail = "Authentication Failed")
+    #if user is None:
+    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
     
     cursor.execute("SELECT * FROM Geofences WHERE name = %s AND DATE(start_time) = %s", (geofence.name, geofence.start_time.date(),))
     db_geofence = cursor.fetchone()
@@ -122,10 +123,10 @@ def get_geofences(db_tuple:db_dependency):
     return {"geofences": geofences}
 
 @app.delete("/delete_geofence/", response_model=str)
-async def delete_geofence(geofence_name: str, db_tuple: db_dependency, user: admin_dependency):
+async def delete_geofence(geofence_name: str, db_tuple: db_dependency):
     db, cursor = db_tuple
-    if user is None:
-        raise HTTPException(status_code=401, detail = "Authentication Failed")
+    #if user is None:
+    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
 
     try:
         # Check if geofence exists
@@ -147,11 +148,11 @@ async def delete_geofence(geofence_name: str, db_tuple: db_dependency, user: adm
 
 # Endpoint to validate user attendance and store in database
 @app.get("/validate_attendance/")
-def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency, user: student_dependency):
+def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency, user:general_user):
     db, cursor = db_tuple
     #Authentication
-    if user is None:
-        raise HTTPException(status_code=401, detail = "Authentication Failed")
+    #if user is None:
+    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
     today = datetime.now() # Get current datetime
 
     # Check if user exists
@@ -191,9 +192,9 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
         
 # Endpoint to list all attendance records
 @app.get("/get_attendance")
-def get_attedance(db_tuple:db_dependency, user: admin_dependency):
-    if user is None:
-        raise HTTPException(status_code=401, detail = "Authentication Failed")
+def get_attedance(db_tuple:db_dependency):
+    #if user is None:
+    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
 
     db, cursor = db_tuple
     cursor.execute("SELECT * FROM AttendanceRecords")
