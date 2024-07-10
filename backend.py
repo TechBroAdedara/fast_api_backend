@@ -78,15 +78,39 @@ def index():
 
 
 # Endpoint to get the list of users
-@app.get("/user")
-def get_user(db_tuple:db_dependency):
+@app.get("/user/")
+def get_user(user_matric:str, db_tuple:db_dependency):
     #if user is None:
     #   raise HTTPException(status_code=401, detail = "Authentication Failed")
     
     db, cursor = db_tuple
-    cursor.execute("SELECT Users.user_matric, Users.username, Users.role FROM Users INNER JOIN AttendanceRecords ON Users.user_matric = AttendanceRecords.user_matric ")
+    Query = """
+            SELECT Users.user_matric, Users.username, Users.role,AttendanceRecords.geofence_name, AttendanceRecords.timestamp 
+            FROM Users 
+            INNER JOIN AttendanceRecords 
+            ON Users.user_matric = AttendanceRecords.user_matric 
+            WHERE Users.user_matric = %s
+            """
+    cursor.execute(Query, (user_matric,))
     rows = cursor.fetchall()
-    return rows 
+    if not rows:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    attendances= [
+        {
+            "Class name" : row["geofence_name"],
+            "Attendance timestamp": row["timestamp"]
+         }
+         for row in rows
+    ]
+    
+    record = {
+        "user_matric": rows[0]["user_matric"],
+        "username": rows[0]["username"],
+        "role" : rows[0]["role"],
+        "Attendances ": attendances
+    }
+    return record 
 
 # Endpoint to create Geofence
 @app.post("/geofences/")
@@ -173,8 +197,8 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
             if check_user_in_circular_geofence(lat, long, geofence): # Proceed to check if user is in geofence and record attendance
                 matric_fence_code = db_user["user_matric"] + geofence["fence_code"]
                 cursor.execute(
-                    "INSERT INTO AttendanceRecords (user_matric, fence_code, timestamp, matric_fence_code) VALUES (%s, %s, %s, %s)",
-                    (user["user_matric"], fence_code, datetime.now(), matric_fence_code,)
+                    "INSERT INTO AttendanceRecords (user_matric, fence_code, geofence_name, timestamp, matric_fence_code) VALUES (%s, %s, %s, %s, %s)",
+                    (user["user_matric"], fence_code, geofence["name"], datetime.now(), matric_fence_code,)
                 )
                 db.commit()
                 return {"message": "Attendance recorded successfully"}
