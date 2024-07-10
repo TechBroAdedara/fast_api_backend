@@ -1,5 +1,7 @@
+import os
 import secrets
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from typing import Annotated, Tuple
 
 import mysql.connector
@@ -12,6 +14,10 @@ from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from starlette import status
+
+if os.getenv('ENVIRONMENT') == 'development':
+    load_dotenv()
+    
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,15 +48,13 @@ class TokenData(BaseModel):
 
 def get_db():
     db = mysql.connector.connect(
-        host="sql8.freesqldatabase.com",
-        user="sql8719091",
-        passwd="95rPXTvw4H",
-        database="sql8719091",
+        host= os.getenv("DB_HOST"), 
+        user=os.getenv("DB_USER"), 
+        passwd=os.getenv("DB_PSWORD"), 
+        database=os.getenv("DB_DB")
     )
     try:
-        cursor = db.cursor(
-            dictionary=True
-        )  # Use dictionary cursor for better readability
+        cursor = db.cursor(dictionary=True)  # Use dictionary cursor for better readability
         yield db, cursor
     finally:
         cursor.close()
