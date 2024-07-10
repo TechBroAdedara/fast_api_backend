@@ -78,13 +78,13 @@ def index():
 
 
 # Endpoint to get the list of users
-@app.get("/get_users")
-def get_users(db_tuple:db_dependency):
+@app.get("/user")
+def get_user(db_tuple:db_dependency):
     #if user is None:
     #   raise HTTPException(status_code=401, detail = "Authentication Failed")
     
     db, cursor = db_tuple
-    cursor.execute("SELECT user_matric, username, role FROM Users")
+    cursor.execute("SELECT Users.user_matric, Users.username, Users.role FROM Users INNER JOIN AttendanceRecords ON Users.user_matric = AttendanceRecords.user_matric ")
     rows = cursor.fetchall()
     return rows 
 
