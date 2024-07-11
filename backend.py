@@ -220,14 +220,25 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
         
 # Endpoint to list all attendance records
 @app.get("/get_attendance")
-def get_attedance(db_tuple:db_dependency):
+def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
     #if user is None:
     #    raise HTTPException(status_code=401, detail = "Authentication Failed")
 
     db, cursor = db_tuple
-    cursor.execute("SELECT * FROM AttendanceRecords")
+    QUERY = """
+            SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
+            FROM AttendanceRecords 
+            INNER JOIN Users
+            ON AttendanceRecords.user_matric = Users.user_matric
+            WHERE geofence_name = %s AND DATE(timestamp) = %s 
+            """
+    cursor.execute(QUERY,(course_title, date,) )
     attendances = cursor.fetchall()
-    return {"attendances": attendances}
+    
+    if not attendances:
+        return "No attendance for this class yet"
+    
+    return {f"{course_title} attendance records": attendances}
 
 
 if __name__ == "__main__":
