@@ -82,7 +82,7 @@ def index():
 
 
 # Endpoint to get the list of users
-@app.get("/user/")
+@app.get("/user")
 def get_user(user_matric:str, db_tuple:db_dependency):
     #if user is None:
     #   raise HTTPException(status_code=401, detail = "Authentication Failed")
@@ -116,8 +116,40 @@ def get_user(user_matric:str, db_tuple:db_dependency):
     }
     return record 
 
+# Endpoint to list all attendance records
+@app.get("/get_attendance")
+def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
+    #if user is None:
+    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
+
+    db, cursor = db_tuple
+    QUERY = """
+            SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
+            FROM AttendanceRecords 
+            INNER JOIN Users
+            ON AttendanceRecords.user_matric = Users.user_matric
+            WHERE geofence_name = %s AND DATE(timestamp) = %s 
+            """
+    cursor.execute(QUERY,(course_title, date,) )
+    attendances = cursor.fetchall()
+    
+    if not attendances:
+        return "No attendance records yet"
+    
+    return {f"{course_title} attendance records": attendances}
+
+
+# Endpoint to get a list of Geofences
+@app.get("/get_geofences")
+def get_geofences(db_tuple:db_dependency):
+    db, cursor = db_tuple
+    cursor.execute("SELECT * FROM Geofences")
+    geofences = cursor.fetchall()
+    return {"geofences": geofences}
+
+
 # Endpoint to create Geofence
-@app.post("/geofences/")
+@app.post("/geofences")
 def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
     db, cursor = db_tuple   
     #if user is None:
@@ -142,41 +174,38 @@ def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
         else:
             raise HTTPException(status_code=500, detail="Database error")
         
-# Endpoint to get a list of Geofences
-@app.get("/get_geofences")
-def get_geofences(db_tuple:db_dependency):
-    db, cursor = db_tuple
-    cursor.execute("SELECT * FROM Geofences")
-    geofences = cursor.fetchall()
-    return {"geofences": geofences}
 
-@app.delete("/delete_geofence/", response_model=str)
-async def delete_geofence(geofence_name: str, db_tuple: db_dependency):
+
+@app.put("/manual_deactivate_geofence", response_model=str)
+async def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_dependency):
     db, cursor = db_tuple
     #if user is None:
     #    raise HTTPException(status_code=401, detail = "Authentication Failed")
 
     try:
         # Check if geofence exists
-        cursor.execute("SELECT * FROM Geofences WHERE name = %s", (geofence_name,))
+        cursor.execute("SELECT * FROM Geofences WHERE name = %s AND DATE(start_time) = %s", (geofence_name, date, ))
         geofence = cursor.fetchone()
         if geofence is None:
-            raise HTTPException(status_code=404, detail="Geofence not found")
-
-        # Delete geofence
-        cursor.execute("DELETE FROM Geofences WHERE name = %s", (geofence_name,))
+            raise HTTPException(status_code=404, detail="Geofence doesn't exist or not found for specified date")
+        
+        if geofence['status'] == 'inactive':
+            return "Geofence is already set to inactive"
+        
+        # Deactivate geofence
+        cursor.execute("UPDATE Geofences SET status = 'inactive' WHERE name = %s AND DATE(start_time) = %s", (geofence_name, date,))
         db.commit()
 
-        return f"Successfully deleted {geofence_name} from the list of available Geofences"
+        return f"Successfully deactivated geofence {geofence_name} for {date} "
 
     except Exception as e:
         # Handle exceptions
-        print(f"Error deleting geofence: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        print(f"Error deactivating geofence: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deactivating geofence: {e}")
 
 # Endpoint to validate user attendance and store in database
-@app.get("/validate_attendance/")
-def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency, user:general_user):
+@app.post("/validate_attendance")
+def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency,user:general_user):
     db, cursor = db_tuple
     #Authentication
     #if user is None:
@@ -191,10 +220,10 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
         raise HTTPException(status_code=404, detail="User not found")
     
     # Check if geofence exists
-    cursor.execute("SELECT * FROM Geofences WHERE fence_code = %s", (fence_code,))
+    cursor.execute("SELECT * FROM Geofences WHERE fence_code = %s AND status = %s", (fence_code, 'active',))
     geofence = cursor.fetchone()
     if not geofence:
-        raise HTTPException(status_code=404, detail=f"Geofence code: {fence_code} not found")
+        raise HTTPException(status_code=404, detail=f"Geofence code: {fence_code} not found or is not active")
     
     try:
         if geofence["start_time"] <= today <= geofence["end_time"]: #if geofence is still open
@@ -202,14 +231,12 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
                 matric_fence_code = db_user["user_matric"] + geofence["fence_code"]
                 cursor.execute(
                     "INSERT INTO AttendanceRecords (user_matric, fence_code, geofence_name, timestamp, matric_fence_code) VALUES (%s, %s, %s, %s, %s)",
-                    (user["user_matric"], fence_code, geofence["name"], datetime.now(), matric_fence_code,)
+                    (db_user["user_matric"], fence_code, geofence["name"], datetime.now(), matric_fence_code,)
                 )
                 db.commit()
                 return {"message": "Attendance recorded successfully"}
             else:
                     return {"message": "User is not within the geofence, no attendance recorded"}
-        else:
-            return "Geofence is not open"
         
     except errors.IntegrityError as e:
         if e.errno == 1062:
@@ -218,28 +245,6 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
             raise HTTPException(status_code=500, detail="Database error")
         
         
-# Endpoint to list all attendance records
-@app.get("/get_attendance")
-def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
-    #if user is None:
-    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
-
-    db, cursor = db_tuple
-    QUERY = """
-            SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
-            FROM AttendanceRecords 
-            INNER JOIN Users
-            ON AttendanceRecords.user_matric = Users.user_matric
-            WHERE geofence_name = %s AND DATE(timestamp) = %s 
-            """
-    cursor.execute(QUERY,(course_title, date,) )
-    attendances = cursor.fetchall()
-    
-    if not attendances:
-        return "No attendance for this class yet"
-    
-    return {f"{course_title} attendance records": attendances}
-
 
 if __name__ == "__main__":
     import uvicorn

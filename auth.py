@@ -123,9 +123,7 @@ def authenticate_user(username: str, password: str, cursor: MySQLCursorDict):
     return user
 
 
-def create_access_token(
-    username: str, role: str, matric: str, expires_delta: timedelta
-):
+def create_access_token(username: str, role: str, matric: str, expires_delta: timedelta):
     encode = {"sub": username, "id": role, "matric": matric}
     expires = datetime.utcnow() + expires_delta
     encode.update({"exp": expires})
