@@ -160,7 +160,7 @@ def get_geofences(db_tuple:db_dependency):
 
 
 # Endpoint to create Geofence
-@app.post("/geofences/")
+@app.post("/create_geofences/")
 def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
     db, cursor = db_tuple   
     #if user is None:
@@ -188,7 +188,7 @@ def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
 
 
 @app.put("/manual_deactivate_geofence/", response_model=str)
-async def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_dependency):
+def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_dependency):
     db, cursor = db_tuple
     #if user is None:
     #    raise HTTPException(status_code=401, detail = "Authentication Failed")
@@ -215,7 +215,7 @@ async def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple:
         raise HTTPException(status_code=500, detail=f"Error deactivating geofence: {e}")
 
 # Endpoint to validate user attendance and store in database
-@app.post("/validate_attendance/")
+@app.post("/record_attendance/")
 def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency,user:general_user):
     db, cursor = db_tuple
     #Authentication
