@@ -91,7 +91,7 @@ def index():
 
 
 # Endpoint to get the list of users
-@app.get("/user")
+@app.get("/user/")
 def get_user(user_matric:str, db_tuple:db_dependency):
     #if user is None:
     #   raise HTTPException(status_code=401, detail = "Authentication Failed")
@@ -126,7 +126,7 @@ def get_user(user_matric:str, db_tuple:db_dependency):
     return record 
 
 # Endpoint to list all attendance records
-@app.get("/get_attendance")
+@app.get("/get_attendance/")
 def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
     #if user is None:
     #    raise HTTPException(status_code=401, detail = "Authentication Failed")
@@ -149,7 +149,7 @@ def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
 
 
 # Endpoint to get a list of Geofences
-@app.get("/get_geofences")
+@app.get("/get_geofences/")
 def get_geofences(db_tuple:db_dependency):
     db, cursor = db_tuple
     cursor.execute("SELECT * FROM Geofences")
@@ -158,7 +158,7 @@ def get_geofences(db_tuple:db_dependency):
 
 
 # Endpoint to create Geofence
-@app.post("/geofences")
+@app.post("/geofences/")
 def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
     db, cursor = db_tuple   
     #if user is None:
@@ -185,7 +185,7 @@ def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
         
 
 
-@app.put("/manual_deactivate_geofence", response_model=str)
+@app.put("/manual_deactivate_geofence/", response_model=str)
 async def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_dependency):
     db, cursor = db_tuple
     #if user is None:
@@ -213,7 +213,7 @@ async def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple:
         raise HTTPException(status_code=500, detail=f"Error deactivating geofence: {e}")
 
 # Endpoint to validate user attendance and store in database
-@app.post("/validate_attendance")
+@app.post("/validate_attendance/")
 def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency,user:general_user):
     db, cursor = db_tuple
     #Authentication

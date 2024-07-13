@@ -64,7 +64,7 @@ def get_db():
 db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/create_user/", status_code=status.HTTP_201_CREATED)
 async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRequest):
     db, cursor = db_tuple
     hashed_password = bcrypt_context.hash(create_user_request.password)
@@ -96,7 +96,7 @@ async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRe
     return {"message": "User created successfully"}
 
 
-@router.post("/token", response_model=Token)
+@router.post("/token/", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db_tuple: db_dependency
 ):
