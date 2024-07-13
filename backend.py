@@ -56,7 +56,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 origins = ["http://localhost:3000"]
 # ----------------------------------------FastAPI App Init--------------------------------------------
 app = FastAPI()
-app.include_router(auth.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins = origins,
@@ -64,6 +63,7 @@ app.add_middleware(
     allow_methods = ["*"],
     allow_headers = ["*"]
 )
+app.include_router(auth.router)
 
 # ----------------------------------------Dependency--------------------------------------------
 def get_db() -> Generator:
