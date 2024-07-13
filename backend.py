@@ -9,6 +9,7 @@ from typing import Annotated, Generator, List, Tuple
 
 import mysql.connector
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from mysql.connector import errors
 from mysql.connector.connection import MySQLConnection
@@ -51,10 +52,18 @@ def generate_alphanumeric_code(length=6):
 # ----------------------------------------Password Hashing--------------------------------------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# ----------------------------------------Password Hashing--------------------------------------------
+origins = ["http://localhost:3000"]
 # ----------------------------------------FastAPI App Init--------------------------------------------
 app = FastAPI()
 app.include_router(auth.router)
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins = origins,
+    allow_credentials = True,
+    allow_methods = ["*"],
+    allow_headers = ["*"]
+)
 
 # ----------------------------------------Dependency--------------------------------------------
 def get_db() -> Generator:
