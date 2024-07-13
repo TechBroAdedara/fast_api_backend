@@ -102,7 +102,7 @@ def get_user(user_matric:str, db_tuple:db_dependency):
     Query = """
             SELECT Users.user_matric, Users.username, Users.role,AttendanceRecords.geofence_name, AttendanceRecords.timestamp 
             FROM Users 
-            INNER JOIN AttendanceRecords 
+            LEFT JOIN AttendanceRecords 
             ON Users.user_matric = AttendanceRecords.user_matric 
             WHERE Users.user_matric = %s
             """
@@ -116,7 +116,7 @@ def get_user(user_matric:str, db_tuple:db_dependency):
             "Class name" : row["geofence_name"],
             "Attendance timestamp": row["timestamp"]
          }
-         for row in rows
+        for row in rows if row["geofence_name"] is not None and row["timestamp"] is not None
     ]
     
     record = {
