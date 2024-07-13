@@ -53,12 +53,14 @@ def generate_alphanumeric_code(length=6):
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ----------------------------------------Password Hashing--------------------------------------------
-origins = ["http://localhost:3000"]
+origins = ["http://localhost:3000",
+           "http://localhost",
+           ]
 # ----------------------------------------FastAPI App Init--------------------------------------------
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = origins,
+    allow_origins = ["*"],
     allow_credentials = True,
     allow_methods = ["*"],
     allow_headers = ["*"]
