@@ -54,7 +54,7 @@ def get_db():
         database=os.getenv("DB_DB")
     )
     try:
-        cursor = db.cursor(dictionary=True)  # Use dictionary cursor for better readability
+        cursor = db.cursor(dictionary=True) 
         yield db, cursor
     finally:
         cursor.close()
@@ -87,7 +87,7 @@ async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRe
         if e.errno == 1062:  # Duplicate entry error code
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail= "ID number/Matric number already exists",
+                detail= "ID number/Email account already exists. Login?",
             )
         else:
             raise HTTPException(

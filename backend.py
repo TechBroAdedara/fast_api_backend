@@ -5,7 +5,7 @@ import string
 from datetime import datetime
 import os
 from dotenv import load_dotenv
-from typing import Annotated, Generator, List, Tuple
+from typing import Annotated, Generator, List, Tuple, Optional
 
 import mysql.connector
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -52,7 +52,7 @@ def generate_alphanumeric_code(length=6):
 # ----------------------------------------Password Hashing--------------------------------------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ----------------------------------------Password Hashing--------------------------------------------
+# ----------------------------------------Allowed Origins--------------------------------------------
 origins = ["http://localhost:3000",
            "http://localhost",
            ]
@@ -92,7 +92,7 @@ def index():
     return "Hello! Access our documentation by adding '/docs' to the url above"
 
 
-# Endpoint to get the list of users
+# ---------------------------- Endpoint to get the list of users
 @app.get("/user/")
 def get_user(user_matric:str, db_tuple:db_dependency):
     #if user is None:
@@ -127,7 +127,7 @@ def get_user(user_matric:str, db_tuple:db_dependency):
     }
     return record 
 
-# Endpoint to list all attendance records
+# ---------------------------- Endpoint to list all attendance records
 @app.get("/get_attendance/")
 def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
     #if user is None:
@@ -149,17 +149,37 @@ def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
     
     return {f"{course_title} attendance records": attendances}
 
-
-# Endpoint to get a list of Geofences
+@app.get('/user_get_attendance/')
+def user_get_attendance(db_tuple : db_dependency ,user: general_user, course_title: Optional[str] = None):
+    db, cursor = db_tuple
+    if course_title is not None:
+        QUERY= 'SELECT * FROM AttendanceRecords WHERE user_matric = %s and geofence_name = %s'
+        cursor.execute(QUERY, (user['user_matric'], course_title,))
+        user_attendances = cursor.fetchall()
+        if not user_attendances:
+            return f"No attendance records for {course_title} yet"
+        
+        return user_attendances
+    else:
+        QUERY= 'SELECT * FROM AttendanceRecords WHERE user_matric = %s'
+        cursor.execute(QUERY, (user['user_matric'],))
+        user_attendances = cursor.fetchall()
+        if not user_attendances:
+            return "No Attendance records yet"
+        return user_attendances
+# ---------------------------- Endpoint to get a list of Geofences
 @app.get("/get_geofences/")
 def get_geofences(db_tuple:db_dependency):
     db, cursor = db_tuple
     cursor.execute("SELECT * FROM Geofences")
     geofences = cursor.fetchall()
+
+    if not geofences:
+        return "No geofences found"
     return {"geofences": geofences}
 
 
-# Endpoint to create Geofence
+# ---------------------------- Endpoint to create Geofence
 @app.post("/create_geofences/")
 def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
     db, cursor = db_tuple   
@@ -214,7 +234,8 @@ def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_de
         print(f"Error deactivating geofence: {e}")
         raise HTTPException(status_code=500, detail=f"Error deactivating geofence: {e}")
 
-# Endpoint to validate user attendance and store in database
+
+# ---------------------------- Endpoint to validate user attendance and store in database
 @app.post("/record_attendance/")
 def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency,user:general_user):
     db, cursor = db_tuple
@@ -237,7 +258,7 @@ def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_de
         raise HTTPException(status_code=404, detail=f"Geofence code: {fence_code} not found or is not active")
     
     try:
-        if geofence["start_time"] <= today <= geofence["end_time"]: #if geofence is still open
+        if geofence["start_time"] <= today <= geofence["end_time"]: #if geofence is still open [Will be changed to if geofence['status] == 'active']
             if check_user_in_circular_geofence(lat, long, geofence): # Proceed to check if user is in geofence and record attendance
                 matric_fence_code = db_user["user_matric"] + geofence["fence_code"]
                 cursor.execute(
