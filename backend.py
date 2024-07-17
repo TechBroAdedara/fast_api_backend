@@ -1,4 +1,3 @@
-import json
 import math
 import random
 import string
@@ -86,87 +85,118 @@ db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_d
 admin_dependency = Annotated[dict, Depends(get_current_admin_user)]
 student_dependency = Annotated[dict, Depends(get_current_student_user)]
 general_user = Annotated[dict, Depends(get_current_user)]
+
+
 # ----------------------------------------Routes--------------------------------------------
 @app.get("/")
 def index():
     return "Hello! Access our documentation by adding '/docs' to the url above"
 
 
+
 # ---------------------------- Endpoint to get the list of users
 @app.get("/user/")
-def get_user(user_matric:str, db_tuple:db_dependency):
-    #if user is None:
-    #   raise HTTPException(status_code=401, detail = "Authentication Failed")
-    
-    db, cursor = db_tuple
-    Query = """
-            SELECT Users.user_matric, Users.username, Users.role,AttendanceRecords.geofence_name, AttendanceRecords.timestamp 
-            FROM Users 
-            LEFT JOIN AttendanceRecords 
-            ON Users.user_matric = AttendanceRecords.user_matric 
-            WHERE Users.user_matric = %s
-            """
-    cursor.execute(Query, (user_matric,))
-    rows = cursor.fetchall()
-    if not rows:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    attendances= [
-        {
-            "Class name" : row["geofence_name"],
-            "Attendance timestamp": row["timestamp"]
-         }
-        for row in rows if row["geofence_name"] is not None and row["timestamp"] is not None
-    ]
-    
-    record = {
-        "user_matric": rows[0]["user_matric"],
-        "username": rows[0]["username"],
-        "role" : rows[0]["role"],
-        "Attendances ": attendances
-    }
-    return record 
+def get_user(user_matric:str, db_tuple:db_dependency, user: admin_dependency):
+    try:
+        if user is None:
+           raise HTTPException(status_code=401, detail = "Authentication Failed")
+        
+        db, cursor = db_tuple
+        Query = """
+                SELECT Users.user_matric, Users.username, Users.role,AttendanceRecords.geofence_name, AttendanceRecords.timestamp 
+                FROM Users 
+                LEFT JOIN AttendanceRecords 
+                ON Users.user_matric = AttendanceRecords.user_matric 
+                WHERE Users.user_matric = %s
+                """
+        cursor.execute(Query, (user_matric,))
+        rows = cursor.fetchall()
+        if not rows:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        attendances= [
+            {
+                "Class name" : row["geofence_name"],
+                "Attendance timestamp": row["timestamp"]
+            }
+            for row in rows if row["geofence_name"] is not None and row["timestamp"] is not None
+        ]
+        
+        record = {
+            "user_matric": rows[0]["user_matric"],
+            "username": rows[0]["username"],
+            "role" : rows[0]["role"],
+            "Attendances ": attendances
+        }
+        return record 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database Error: {e}")
+
+
 
 # ---------------------------- Endpoint to list all attendance records
 @app.get("/get_attendance/")
-def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency):
-    #if user is None:
-    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
+def get_attedance(course_title:str, date:datetime, db_tuple:db_dependency, user: admin_dependency):
+    try:
+        if user is None:
+            raise HTTPException(status_code=401, detail = "Authentication Failed")
 
-    db, cursor = db_tuple
-    QUERY = """
-            SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
-            FROM AttendanceRecords 
-            INNER JOIN Users
-            ON AttendanceRecords.user_matric = Users.user_matric
-            WHERE geofence_name = %s AND DATE(timestamp) = %s 
-            """
-    cursor.execute(QUERY,(course_title, date,) )
-    attendances = cursor.fetchall()
-    
-    if not attendances:
-        return "No attendance records yet"
-    
-    return {f"{course_title} attendance records": attendances}
-
-@app.get('/user_get_attendance/')
-def user_get_attendance(db_tuple : db_dependency ,user: general_user, course_title: Optional[str] = None):
-    db, cursor = db_tuple
-    if course_title is not None:
-        QUERY= 'SELECT * FROM AttendanceRecords WHERE user_matric = %s and geofence_name = %s'
-        cursor.execute(QUERY, (user['user_matric'], course_title,))
-        user_attendances = cursor.fetchall()
-        if not user_attendances:
-            return f"No attendance records for {course_title} yet"
+        db, cursor = db_tuple
+        QUERY = """
+                SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
+                FROM AttendanceRecords 
+                INNER JOIN Users
+                ON AttendanceRecords.user_matric = Users.user_matric
+                WHERE geofence_name = %s AND DATE(timestamp) = %s 
+                """
+        cursor.execute(QUERY,(course_title, date,) )
+        attendances = cursor.fetchall()
         
-        return user_attendances
-    else:
-        QUERY= 'SELECT * FROM AttendanceRecords WHERE user_matric = %s'
-        cursor.execute(QUERY, (user['user_matric'],))
-        user_attendances = cursor.fetchall()
-        if not user_attendances:
-            return "No Attendance records yet"
-        return user_attendances
+        if not attendances:
+            return "No attendance records yet"
+        
+        return {f"{course_title} attendance records": attendances}
+
+    except Exception as e:
+        raise HTTPException(status_code= 500, detail= f" Database error {e}")
+
+
+
+# ---------------------------- Endpoint to list user attendance records
+@app.get('/user_get_attendance/')
+def user_get_attendance(db_tuple : db_dependency ,user: student_dependency, course_title: Optional[str] = None):
+    try:
+        db, cursor = db_tuple
+
+        #when a user provides a geofence/course name
+        if course_title is not None:
+            cursor.execute("SELECT * FROM Geofences WHERE name = %s", (course_title,))
+            course = cursor.fetchall()
+            if not course:
+                raise HTTPException(status_code=404, detail="Geofence Not found")
+            
+            QUERY= 'SELECT * FROM AttendanceRecords WHERE user_matric = %s and geofence_name = %s'
+            cursor.execute(QUERY, (user['user_matric'], course_title,))
+            user_attendances = cursor.fetchall()
+            if not user_attendances:
+                return f"No attendance records for {course_title} yet"
+            
+            return user_attendances
+        
+        else:
+            #when the user doesn't specify a course_title
+            QUERY= 'SELECT * FROM AttendanceRecords WHERE user_matric = %s'
+            cursor.execute(QUERY, (user['user_matric'],))
+            user_attendances = cursor.fetchall()
+            if not user_attendances:
+                return "No Attendance records yet"
+            return user_attendances
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail= f"Database Error: {e}")
+
+
+
 # ---------------------------- Endpoint to get a list of Geofences
 @app.get("/get_geofences/")
 def get_geofences(db_tuple:db_dependency):
@@ -179,12 +209,13 @@ def get_geofences(db_tuple:db_dependency):
     return {"geofences": geofences}
 
 
+
 # ---------------------------- Endpoint to create Geofence
 @app.post("/create_geofences/")
-def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
+def create_geofence(geofence: GeofenceCreate, user: admin_dependency, db_tuple = Depends(get_db)):
     db, cursor = db_tuple   
-    #if user is None:
-    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
+    if user is None:
+        raise HTTPException(status_code=401, detail = "Authentication Failed")
     
     cursor.execute("SELECT * FROM Geofences WHERE name = %s AND DATE(start_time) = %s", (geofence.name, geofence.start_time.date(),))
     db_geofence = cursor.fetchone()
@@ -207,11 +238,12 @@ def create_geofence(geofence: GeofenceCreate,db_tuple = Depends(get_db)):
         
 
 
+# ---------------------------- Endpoint to manually deactivate geofence
 @app.put("/manual_deactivate_geofence/", response_model=str)
-def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_dependency):
+def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_dependency, user: admin_dependency):
     db, cursor = db_tuple
-    #if user is None:
-    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
+    if user is None:
+        raise HTTPException(status_code=401, detail = "Authentication Failed")
 
     try:
         # Check if geofence exists
@@ -235,13 +267,14 @@ def manual_deactivate_geofence(geofence_name: str,date:datetime, db_tuple: db_de
         raise HTTPException(status_code=500, detail=f"Error deactivating geofence: {e}")
 
 
+
 # ---------------------------- Endpoint to validate user attendance and store in database
 @app.post("/record_attendance/")
-def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency,user:general_user):
+def validate_attendance(fence_code:str, lat: float, long: float, db_tuple: db_dependency,user:student_dependency):
     db, cursor = db_tuple
     #Authentication
-    #if user is None:
-    #    raise HTTPException(status_code=401, detail = "Authentication Failed")
+    if user is None:
+        raise HTTPException(status_code=401, detail = "Authentication Failed")
     today = datetime.now() # Get current datetime
 
     # Check if user exists
