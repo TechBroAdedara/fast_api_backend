@@ -7,7 +7,7 @@ from typing import Annotated, Generator, Tuple, Optional
 
 import mysql.connector
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mysql.connector import errors
 from mysql.connector.connection import MySQLConnection
@@ -99,6 +99,13 @@ general_user = Annotated[dict, Depends(get_current_user)]
 def index():
     return "Hello! Access our documentation by adding '/docs' to the url above"
 
+#Webhook
+@app.webhooks.post("New attendance")
+def new_attendance():
+    return "Hello"
+
+
+
 
 # ---------------------------- Endpoint to get the list of users
 @app.get("/user/")
@@ -141,7 +148,10 @@ def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
 # ---------------------------- Endpoint to list all attendance records
 @app.get("/get_attendance/")
 def get_attedance(
-    course_title: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
+    course_title: str, 
+    date: datetime, 
+    db_tuple: db_dependency, 
+    user: admin_dependency
 ):
     try:
         _, cursor = db_tuple
@@ -231,7 +241,9 @@ def get_geofences(db_tuple: db_dependency, user: general_user):
 # ---------------------------- Endpoint to create Geofence
 @app.post("/create_geofences/")
 def create_geofence(
-    geofence: GeofenceCreate, user: admin_dependency, db_tuple: db_dependency
+    geofence: GeofenceCreate, 
+    user: admin_dependency, 
+    db_tuple: db_dependency
 ):
     db, cursor = db_tuple
 
@@ -278,7 +290,10 @@ def create_geofence(
 # ---------------------------- Endpoint to manually deactivate geofence
 @app.put("/manual_deactivate_geofence/", response_model=str)
 def manual_deactivate_geofence(
-    geofence_name: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
+    geofence_name: str, 
+    date: datetime, 
+    db_tuple: db_dependency, 
+    user: admin_dependency
 ):
     db, cursor = db_tuple
     try:
@@ -374,14 +389,14 @@ def validate_attendance(
                 db.commit()
                 return {"message": "Attendance recorded successfully"}
 
-            return {
-                "message": "User is not within the geofence, no attendance recorded"
-            }
+            return {"message": "User is not within the geofence, no attendance recorded"}
 
         return {"message": "Geofence is not open for attendance"}
+    
     except errors.IntegrityError as e:
         if e.errno == 1062:
             return "User has already signed attendance for this class"
+        
         raise HTTPException(status_code=500, detail="Database error")
 
 
