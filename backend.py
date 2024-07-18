@@ -62,7 +62,7 @@ origins = [
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], #Just for Development. Would be changed later.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -113,6 +113,7 @@ def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
                 WHERE Users.user_matric = %s
                 """
         cursor.execute(QUERY, (user_matric,))
+        
         rows = cursor.fetchall()
         if not rows:
             raise HTTPException(status_code=404, detail="User not found")
