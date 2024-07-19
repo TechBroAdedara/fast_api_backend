@@ -6,6 +6,7 @@ import os
 from typing import Annotated, Generator, Tuple, Optional
 
 import mysql.connector
+from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -93,7 +94,32 @@ admin_dependency = Annotated[dict, Depends(get_current_admin_user)]
 student_dependency = Annotated[dict, Depends(get_current_student_user)]
 general_user = Annotated[dict, Depends(get_current_user)]
 
+# ----------------------------------------Scheduler Setup--------------------------------------------
+scheduler = BackgroundScheduler()
+scheduler.start()
 
+def check_and_deactivate_geofences():
+    """Background scheduler to deactivate geofences once the endtime has been reached."""
+    now = datetime.now()
+    db = mysql.connector.connect(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        passwd=os.getenv("DB_PSWORD"),
+        database=os.getenv("DB_DB"),
+    )
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "UPDATE Geofences SET status = 'inactive' WHERE end_time < %s AND status = 'active'",
+            (now,)
+        )
+        db.commit()
+    finally:
+        cursor.close()
+        db.close()
+
+# Schedule the task to run every 5 minutes
+scheduler.add_job(check_and_deactivate_geofences, 'interval', minutes=5)
 # ----------------------------------------Routes--------------------------------------------
 @app.get("/")
 def index():
@@ -408,8 +434,8 @@ def validate_attendance(
 
     try:
         if (
-            geofence["start_time"] <= today <= geofence["end_time"]
-        ):  # if geofence is still open [Will be changed to if geofence['status] == 'active']
+           geofence['status'] == 'active'
+        ):
             if check_user_in_circular_geofence(
                 lat, long, geofence
             ):  # Proceed to check if user is in geofence and record attendance
