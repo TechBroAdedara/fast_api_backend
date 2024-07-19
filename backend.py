@@ -120,6 +120,7 @@ def check_and_deactivate_geofences():
 
 # Schedule the task to run every 5 minutes
 scheduler.add_job(check_and_deactivate_geofences, 'interval', minutes=5)
+
 # ----------------------------------------Routes--------------------------------------------
 @app.get("/")
 def index():
@@ -276,16 +277,22 @@ def user_get_attendance(
 
 # ---------------------------- Endpoint to get a list of Geofences
 @app.get("/get_geofences/")
-def get_geofences(db_tuple: db_dependency, user: general_user):
+def get_geofences( db_tuple: db_dependency, user: general_user, course_title: Optional[str] = None,):
     """Gets all the active geofences.
     (Will later be implemented as a websocket to update list in real-time)
     """
     _, cursor = db_tuple
-    cursor.execute("SELECT * FROM Geofences")
-    geofences = cursor.fetchall()
+
+    if course_title is None:
+        cursor.execute("SELECT * FROM Geofences")
+        geofences = cursor.fetchall()
+    else:
+        cursor.execute("SELECT * FROM Geofences WHERE name = %s", (course_title,))
+        geofences = cursor.fetchall()
 
     if not geofences:
         return "No geofences found"
+    
     return {"geofences": geofences}
 
 
@@ -345,7 +352,6 @@ def manual_deactivate_geofence(
     geofence_name: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
 ):
     """Manually deactivates the Geofence for the admin.
-    (Will still be implemented to automatically deactivate geofence once endtime has reached )
     """
     db, cursor = db_tuple
     try:
@@ -407,8 +413,6 @@ def validate_attendance(
     """Student Endpoint for validating attendance"""
 
     db, cursor = db_tuple
-    # Authentication
-    today = datetime.now()  # Get current datetime
 
     # Check if user exists
     cursor.execute("SELECT * FROM Users WHERE user_matric = %s", (user["user_matric"],))
@@ -435,10 +439,10 @@ def validate_attendance(
     try:
         if (
            geofence['status'] == 'active'
-        ):
+        ):# Proceed to check if user is in geofence and record attendance
             if check_user_in_circular_geofence(
                 lat, long, geofence
-            ):  # Proceed to check if user is in geofence and record attendance
+            ):  
                 matric_fence_code = db_user["user_matric"] + geofence["fence_code"]
                 cursor.execute(
                     "INSERT INTO AttendanceRecords (user_matric, fence_code, geofence_name, timestamp, matric_fence_code) VALUES (%s, %s, %s, %s, %s)",

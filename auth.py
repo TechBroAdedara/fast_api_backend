@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from typing import Annotated, Tuple, Optional, Dict
+from typing import Annotated, Tuple
 
 import mysql.connector
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +13,8 @@ from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from starlette import status
+
+from schemas import CreateUserRequest, Token, TokenData
 
 if os.getenv('ENVIRONMENT') == 'development':
     load_dotenv()
@@ -26,23 +28,6 @@ ALGORITHM = "HS256"
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token/")
 
-
-class CreateUserRequest(BaseModel):
-    email: EmailStr
-    user_matric: str
-    username: str
-    password: str
-    role: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    username: str | None = None
-    role: str | None = None
 
 
 def get_db():
