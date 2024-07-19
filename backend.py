@@ -7,7 +7,7 @@ from typing import Annotated, Generator, Tuple, Optional
 
 import mysql.connector
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mysql.connector import errors
 from mysql.connector.connection import MySQLConnection
@@ -62,7 +62,7 @@ origins = [
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], #Just for Development. Would be changed later.
+    allow_origins=["*"],  # Just for Development. Would be changed later.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -100,9 +100,18 @@ def index():
     return "Hello! Access our documentation by adding '/docs' to the url above"
 
 
+# Webhook
+# @app.webhooks.post("New attendance")
+# def new_attendance():
+#     return "Hello"
+
+
 # ---------------------------- Endpoint to get the list of users
 @app.get("/user/")
 def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
+    """Get the user and their records from the database.
+    Record includes: User Matric, User's full name, User's role, Users Attendance Records, and the timestamp of each attendance record.
+    """
     try:
         _, cursor = db_tuple
         QUERY = """
@@ -113,7 +122,7 @@ def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
                 WHERE Users.user_matric = %s
                 """
         cursor.execute(QUERY, (user_matric,))
-        
+
         rows = cursor.fetchall()
         if not rows:
             raise HTTPException(status_code=404, detail="User not found")
@@ -143,31 +152,50 @@ def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
 def get_attedance(
     course_title: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
 ):
-    try:
-        _, cursor = db_tuple
-        QUERY = """
-                SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
-                FROM AttendanceRecords 
-                INNER JOIN Users
-                ON AttendanceRecords.user_matric = Users.user_matric
-                WHERE geofence_name = %s AND DATE(timestamp) = %s 
-                """
-        cursor.execute(
-            QUERY,
-            (
-                course_title,
-                date,
-            ),
+    """Gets the attendace record for a given course.
+    User can only see the records if they created the class.
+    """
+    _, cursor = db_tuple
+    cursor.execute(
+        " SELECT * FROM Geofences WHERE name = %s and DATE(start_time) = %s",
+        (
+            course_title,
+            date,
+        ),
+    )
+    geofence = cursor.fetchone()
+    if not geofence:
+        raise HTTPException(
+            status_code=404,
+            detail="Geofence not found for the specified course and date. No records",
         )
-        attendances = cursor.fetchall()
 
-        if not attendances:
-            return "No attendance records yet"
+    if geofence["creator"] != user["username"]:
+        raise HTTPException(
+            status_code=401,
+            detail="No permission to view this class attendances, as you're not the creator of the geofence",
+        )
 
-        return {f"{course_title} attendance records": attendances}
+    QUERY = """
+            SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
+            FROM AttendanceRecords
+            INNER JOIN Users
+            ON AttendanceRecords.user_matric = Users.user_matric
+            WHERE geofence_name = %s AND DATE(timestamp) = %s 
+            """
+    cursor.execute(
+        QUERY,
+        (
+            course_title,
+            date,
+        ),
+    )
+    attendances = cursor.fetchall()
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f" Database error {e}")
+    if not attendances:
+        return "No attendance records yet"
+
+    return {f"{course_title} attendance records": attendances}
 
 
 # ---------------------------- Endpoint to list user attendance records
@@ -177,6 +205,10 @@ def user_get_attendance(
     user: student_dependency,
     course_title: Optional[str] = None,
 ):
+    """Gets the attendance records of a student, for the student.
+    If no class is specified, returns all records of the student.
+    if specified, returns all records of the student for the particular class.
+    """
     try:
         _, cursor = db_tuple
 
@@ -219,6 +251,9 @@ def user_get_attendance(
 # ---------------------------- Endpoint to get a list of Geofences
 @app.get("/get_geofences/")
 def get_geofences(db_tuple: db_dependency, user: general_user):
+    """Gets all the active geofences.
+    (Will later be implemented as a websocket to update list in real-time)
+    """
     _, cursor = db_tuple
     cursor.execute("SELECT * FROM Geofences")
     geofences = cursor.fetchall()
@@ -233,6 +268,7 @@ def get_geofences(db_tuple: db_dependency, user: general_user):
 def create_geofence(
     geofence: GeofenceCreate, user: admin_dependency, db_tuple: db_dependency
 ):
+    """Creates a Geofence with a specific start_time and end_time."""
     db, cursor = db_tuple
 
     cursor.execute(
@@ -252,10 +288,11 @@ def create_geofence(
     try:
         code = generate_alphanumeric_code()
         cursor.execute(
-            "INSERT INTO Geofences (fence_code, name, latitude, longitude, radius, fence_type, start_time, end_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO Geofences (fence_code, name, creator, latitude, longitude, radius, fence_type, start_time, end_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 code,
                 geofence.name,
+                user["username"],
                 geofence.latitude,
                 geofence.longitude,
                 geofence.radius,
@@ -266,6 +303,7 @@ def create_geofence(
         )
         db.commit()
         return {"Code": code, "name": geofence.name}
+
     except errors.IntegrityError as e:
         if e.errno == 1062:  # Duplicate entry error code
             raise HTTPException(
@@ -280,6 +318,9 @@ def create_geofence(
 def manual_deactivate_geofence(
     geofence_name: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
 ):
+    """Manually deactivates the Geofence for the admin.
+    (Will still be implemented to automatically deactivate geofence once endtime has reached )
+    """
     db, cursor = db_tuple
     try:
         # Check if geofence exists
@@ -300,6 +341,12 @@ def manual_deactivate_geofence(
         if geofence["status"] == "inactive":
             return "Geofence is already set to inactive"
 
+        if user["username"] != geofence["creator"]:
+            raise HTTPException(
+                status_code=401,
+                detail="You don't have permission to delete this class as you are not the creator.",
+            )
+
         # Deactivate geofence
         cursor.execute(
             "UPDATE Geofences SET status = 'inactive' WHERE name = %s AND DATE(start_time) = %s",
@@ -311,6 +358,10 @@ def manual_deactivate_geofence(
         db.commit()
 
         return f"Successfully deactivated geofence {geofence_name} for {date} "
+
+    except HTTPException as http_exc:
+        # Re-raise HTTPException without additional handling
+        raise http_exc
 
     except Exception as e:
         # Handle exceptions
@@ -327,6 +378,8 @@ def validate_attendance(
     db_tuple: db_dependency,
     user: student_dependency,
 ):
+    """Student Endpoint for validating attendance"""
+
     db, cursor = db_tuple
     # Authentication
     today = datetime.now()  # Get current datetime
@@ -379,9 +432,11 @@ def validate_attendance(
             }
 
         return {"message": "Geofence is not open for attendance"}
+
     except errors.IntegrityError as e:
         if e.errno == 1062:
             return "User has already signed attendance for this class"
+
         raise HTTPException(status_code=500, detail="Database error")
 
 
