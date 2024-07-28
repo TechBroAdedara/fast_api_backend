@@ -315,7 +315,7 @@ def create_geofence(
     if db_geofence:
         raise HTTPException(
             status_code=400,
-            detail=f"Geofence with this name already exists for today and is ending {db_geofence["end_time"]}",
+            detail="Geofence with this name already exists for today",
         )
 
     try:
