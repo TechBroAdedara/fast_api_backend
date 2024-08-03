@@ -438,7 +438,7 @@ def validate_attendance(
 
     try:
         if (
-           geofence['status'] == 'active'
+           geofence['status'].lower() == 'active'
         ):# Proceed to check if user is in geofence and record attendance
             if check_user_in_circular_geofence(
                 lat, long, geofence
@@ -460,8 +460,8 @@ def validate_attendance(
             return {
                 "message": "User is not within the geofence, no attendance recorded"
             }
-
-        return {"message": "Geofence is not open for attendance"}
+        else:
+            return {"message": "Geofence is not open for attendance"}
 
     except errors.IntegrityError as e:
         if e.errno == 1062:
