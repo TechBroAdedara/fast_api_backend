@@ -467,7 +467,7 @@ def validate_attendance(
         if e.errno == 1062:
             return "User has already signed attendance for this class"
 
-        raise HTTPException(status_code=500, detail="Database error")
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
 
 if __name__ == "__main__":
