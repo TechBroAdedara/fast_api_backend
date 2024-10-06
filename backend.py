@@ -79,29 +79,6 @@ admin_dependency = Annotated[dict, Depends(get_current_admin_user)]
 student_dependency = Annotated[dict, Depends(get_current_student_user)]
 general_user = Annotated[dict, Depends(get_current_user)]
 
-# ----------------------------------------Scheduler Setup--------------------------------------------
-scheduler = BackgroundScheduler()
-scheduler.start()
-
-
-def check_and_deactivate_geofences(db_tuple: db_dependency):
-    """Background scheduler to deactivate geofences once the endtime has been reached."""
-    now = datetime.now()
-    db, cursor = db_tuple
-    try:
-        cursor.execute(
-            "UPDATE Geofences SET status = 'inactive' WHERE end_time < %s AND status = 'active'",
-            (now,),
-        )
-        db.commit()
-    finally:
-        cursor.close()
-        db.close()
-
-
-# Schedule the task to run every 5 minutes
-scheduler.add_job(check_and_deactivate_geofences, "interval", minutes=5)
-
 
 # ----------------------------------------Routes--------------------------------------------
 @app.get("/")
