@@ -10,6 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from icecream import ic
 from mysql.connector import errors
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor import MySQLCursorDict
@@ -18,6 +19,7 @@ from passlib.context import CryptContext
 import auth
 from auth import get_current_admin_user, get_current_student_user, get_current_user
 from schemas import GeofenceCreate
+from database_connection import get_db
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
@@ -71,24 +73,7 @@ app.add_middleware(
 app.include_router(auth.router)
 
 
-# ----------------------------------------Dependency--------------------------------------------
-def get_db() -> Generator:
-    db = mysql.connector.connect(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        passwd=os.getenv("DB_PSWORD"),
-        database=os.getenv("DB_DB"),
-    )
-    try:
-        cursor = db.cursor(
-            dictionary=True
-        )  # Use dictionary cursor for better readability
-        yield db, cursor
-    finally:
-        cursor.close()
-        db.close()
-
-
+# ----------------------------------------Dependencies--------------------------------------------
 db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
 admin_dependency = Annotated[dict, Depends(get_current_admin_user)]
 student_dependency = Annotated[dict, Depends(get_current_student_user)]
@@ -97,6 +82,7 @@ general_user = Annotated[dict, Depends(get_current_user)]
 # ----------------------------------------Scheduler Setup--------------------------------------------
 scheduler = BackgroundScheduler()
 scheduler.start()
+
 
 def check_and_deactivate_geofences():
     """Background scheduler to deactivate geofences once the endtime has been reached."""
@@ -111,15 +97,17 @@ def check_and_deactivate_geofences():
     try:
         cursor.execute(
             "UPDATE Geofences SET status = 'inactive' WHERE end_time < %s AND status = 'active'",
-            (now,)
+            (now,),
         )
         db.commit()
     finally:
         cursor.close()
         db.close()
 
+
 # Schedule the task to run every 5 minutes
-scheduler.add_job(check_and_deactivate_geofences, 'interval', minutes=5)
+scheduler.add_job(check_and_deactivate_geofences, "interval", minutes=5)
+
 
 # ----------------------------------------Routes--------------------------------------------
 @app.get("/")
@@ -135,7 +123,7 @@ def index():
 
 # ---------------------------- Endpoint to get the list of users
 @app.get("/user/")
-def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
+def get_user(user_matric: str, db_tuple: db_dependency, _: admin_dependency):
     """Get the user and their records from the database.
     Record includes: User Matric, User's full name, User's role, Users Attendance Records, and the timestamp of each attendance record.
     """
@@ -171,7 +159,10 @@ def get_user(user_matric: str, db_tuple: db_dependency, user: admin_dependency):
         }
         return record
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database Error: {e}")
+        ic(e)
+        raise HTTPException(
+            status_code=500, detail="Database Error: Contact Administrator"
+        )
 
 
 # ---------------------------- Endpoint to list all attendance records
@@ -277,7 +268,11 @@ def user_get_attendance(
 
 # ---------------------------- Endpoint to get a list of Geofences
 @app.get("/get_geofences/")
-def get_geofences( db_tuple: db_dependency, user: general_user, course_title: Optional[str] = None,):
+def get_geofences(
+    db_tuple: db_dependency,
+    user: general_user,
+    course_title: Optional[str] = None,
+):
     """Gets all the active geofences.
     (Will later be implemented as a websocket to update list in real-time)
     """
@@ -292,7 +287,7 @@ def get_geofences( db_tuple: db_dependency, user: general_user, course_title: Op
 
     if not geofences:
         return "No geofences found"
-    
+
     return {"geofences": geofences}
 
 
@@ -348,11 +343,10 @@ def create_geofence(
 
 # ---------------------------- Endpoint to manually deactivate geofence
 @app.put("/manual_deactivate_geofence/", response_model=str)
-def manual_deactivate_geofence(
+def manual__geofence(
     geofence_name: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
 ):
-    """Manually deactivates the Geofence for the admin.
-    """
+    """Manually deactivates the Geofence for the admin."""
     db, cursor = db_tuple
     try:
         # Check if geofence exists
@@ -371,7 +365,7 @@ def manual_deactivate_geofence(
             )
 
         if geofence["status"] == "inactive":
-            return "Geofence is already set to inactive"
+            return "Geofence has already been deactivated"
 
         if user["username"] != geofence["creator"]:
             raise HTTPException(
@@ -391,14 +385,13 @@ def manual_deactivate_geofence(
 
         return f"Successfully deactivated geofence {geofence_name} for {date} "
 
-    except HTTPException as http_exc:
-        # Re-raise HTTPException without additional handling
-        raise http_exc
-
     except Exception as e:
         # Handle exceptions
         print(f"Error deactivating geofence: {e}")
-        raise HTTPException(status_code=500, detail=f"Error deactivating geofence: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deactivating geofence. Contact administrator.",
+        )
 
 
 # ---------------------------- Endpoint to validate user attendance and store in database
@@ -438,11 +431,9 @@ def validate_attendance(
 
     try:
         if (
-           geofence['status'].lower() == 'active'
-        ):# Proceed to check if user is in geofence and record attendance
-            if check_user_in_circular_geofence(
-                lat, long, geofence
-            ):  
+            geofence["status"].lower() == "active"
+        ):  # Proceed to check if user is in geofence and record attendance
+            if check_user_in_circular_geofence(lat, long, geofence):
                 matric_fence_code = db_user["user_matric"] + geofence["fence_code"]
                 cursor.execute(
                     "INSERT INTO AttendanceRecords (user_matric, fence_code, geofence_name, timestamp, matric_fence_code) VALUES (%s, %s, %s, %s, %s)",
@@ -467,7 +458,10 @@ def validate_attendance(
         if e.errno == 1062:
             return "User has already signed attendance for this class"
 
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        print(e)
+        raise HTTPException(
+            status_code=500, detail=f"Internal Error. Contact administrator."
+        )
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -13,16 +14,16 @@ from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from starlette import status
-
+from database_connection import get_db
 from schemas import CreateUserRequest, Token, TokenData
 
-if os.getenv('ENVIRONMENT') == 'development':
+if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
-    
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-SECRET_KEY = str(os.getenv('SECRET_KEY'))
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -30,19 +31,6 @@ oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token/")
 
 
 
-def get_db():
-    db = mysql.connector.connect(
-        host= os.getenv("DB_HOST"), 
-        user=os.getenv("DB_USER"), 
-        passwd=os.getenv("DB_PSWORD"), 
-        database=os.getenv("DB_DB")
-    )
-    try:
-        cursor = db.cursor(dictionary=True) 
-        yield db, cursor
-    finally:
-        cursor.close()
-        db.close()
 
 
 db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
@@ -67,17 +55,19 @@ async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRe
             ),
         )
         db.commit()
-    except IntegrityError as e:
-        if e.errno == 1062:  # Duplicate entry error code
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail= "ID number/Email account already exists. Login?",
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred while creating the user.",
-            )
+    # except IntegrityError as e:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="ID number/Email account already exists. Login?",
+    #     )
+    except Exception as e:
+        # Capture any other generic exceptions for better error handling
+        logging.error(f"General error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
+
     return {"message": "User created successfully"}
 
 
@@ -94,17 +84,23 @@ async def login_for_access_token(
 
     if not userCheck:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail = "User not registered yet"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not registered yet"
         )
-    
+
     user = authenticate_user(form_data.username, form_data.password, cursor)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password incorrect")
-        
-    token = create_access_token(
-        user['email'], user['username'], user["role"], user["user_matric"], timedelta(minutes=20)
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email or password incorrect",
         )
+
+    token = create_access_token(
+        user["email"],
+        user["username"],
+        user["role"],
+        user["user_matric"],
+        timedelta(minutes=20),
+    )
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -117,8 +113,19 @@ def authenticate_user(email: EmailStr, password: str, cursor: MySQLCursorDict):
     return user
 
 
-def create_access_token(email: EmailStr, username: str, role: str, user_matric: str, expires_delta: timedelta):
-    encode = {"sub": email, "username": username, "role": role, "user_matric": user_matric }
+def create_access_token(
+    email: EmailStr,
+    username: str,
+    role: str,
+    user_matric: str,
+    expires_delta: timedelta,
+):
+    encode = {
+        "sub": email,
+        "username": username,
+        "role": role,
+        "user_matric": user_matric,
+    }
     expires = datetime.utcnow() + expires_delta
     encode.update({"exp": expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -127,23 +134,29 @@ def create_access_token(email: EmailStr, username: str, role: str, user_matric: 
 def decode_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get('sub')
-        username= payload.get("username")
-        role= payload.get("role")
-        user_matric= payload.get("user_matric")
+        email = payload.get("sub")
+        username = payload.get("username")
+        role = payload.get("role")
+        user_matric = payload.get("user_matric")
 
         if not all([email, username, role, user_matric]):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate user",
             )
-        
-        return {"email": email, "username": username, "role": role, "user_matric": user_matric}
+
+        return {
+            "email": email,
+            "username": username,
+            "role": role,
+            "user_matric": user_matric,
+        }
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate user.",
         )
+
 
 def get_current_user(token: str = Depends(oauth2_bearer)):
     return decode_token(token)
