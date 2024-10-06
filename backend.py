@@ -1,3 +1,4 @@
+import logging
 import math
 import random
 import string
@@ -302,7 +303,6 @@ def create_geofence(
         )
         db.commit()
         return {"Code": code, "name": geofence.name}
-
     except errors.IntegrityError as e:
         if e.errno == 1062:  # Duplicate entry error code
             raise HTTPException(
@@ -314,7 +314,7 @@ def create_geofence(
 
 # ---------------------------- Endpoint to manually deactivate geofence
 @app.put("/manual_deactivate_geofence/", response_model=str)
-def manual__geofence(
+def manual_geofence(
     geofence_name: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
 ):
     """Manually deactivates the Geofence for the admin."""
@@ -336,7 +336,7 @@ def manual__geofence(
             )
 
         if geofence["status"] == "inactive":
-            return "Geofence has already been deactivated"
+            raise HTTPException(status_code=400, detail="Geofence is already inactive")
 
         if user["username"] != geofence["creator"]:
             raise HTTPException(
@@ -358,7 +358,7 @@ def manual__geofence(
 
     except Exception as e:
         # Handle exceptions
-        print(f"Error deactivating geofence: {e}")
+        logging.error(f"Error deactivating geofence: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Error deactivating geofence. Contact administrator.",
@@ -382,6 +382,7 @@ def validate_attendance(
     cursor.execute("SELECT * FROM Users WHERE user_matric = %s", (user["user_matric"],))
     db_user = cursor.fetchone()
 
+    # if the user doesn't exist...
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -417,17 +418,25 @@ def validate_attendance(
                     ),
                 )
                 db.commit()
+
+                # THE ONLY SUCCESS
                 return {"message": "Attendance recorded successfully"}
 
-            return {
-                "message": "User is not within the geofence, no attendance recorded"
-            }
+            raise HTTPException(
+                status_code=400,
+                detail="User is not within geofence, attendance not recorded",
+            )
         else:
-            return {"message": "Geofence is not open for attendance"}
+            raise HTTPException(
+                status_code=404, detail="Geofence is not open for attendance"
+            )
 
     except errors.IntegrityError as e:
         if e.errno == 1062:
-            return "User has already signed attendance for this class"
+            raise HTTPException(
+                status_code=400,
+                detail="User has already signed attendance for this class",
+            )
 
         print(e)
         raise HTTPException(
