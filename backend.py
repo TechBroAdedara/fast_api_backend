@@ -84,16 +84,10 @@ scheduler = BackgroundScheduler()
 scheduler.start()
 
 
-def check_and_deactivate_geofences():
+def check_and_deactivate_geofences(db_tuple: db_dependency):
     """Background scheduler to deactivate geofences once the endtime has been reached."""
     now = datetime.now()
-    db = mysql.connector.connect(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        passwd=os.getenv("DB_PSWORD"),
-        database=os.getenv("DB_DB"),
-    )
-    cursor = db.cursor(dictionary=True)
+    db, cursor = db_tuple
     try:
         cursor.execute(
             "UPDATE Geofences SET status = 'inactive' WHERE end_time < %s AND status = 'active'",

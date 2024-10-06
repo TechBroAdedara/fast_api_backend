@@ -55,17 +55,17 @@ async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRe
             ),
         )
         db.commit()
-    # except IntegrityError as e:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="ID number/Email account already exists. Login?",
-    #     )
+    except IntegrityError as f:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ID number/Email account already exists. Login?",
+        )
     except Exception as e:
         # Capture any other generic exceptions for better error handling
         logging.error(f"General error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}",
+            detail="An unexpected error occurred",
         )
 
     return {"message": "User created successfully"}
