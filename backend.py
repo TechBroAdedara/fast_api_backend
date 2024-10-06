@@ -183,7 +183,7 @@ def get_attedance(
     attendances = cursor.fetchall()
 
     if not attendances:
-        return "No attendance records yet"
+        raise HTTPException(status_code=404, detail ="No attendance records yet")
 
     return {f"{course_title} attendance records": attendances}
 
@@ -220,7 +220,7 @@ def user_get_attendance(
             )
             user_attendances = cursor.fetchall()
             if not user_attendances:
-                return f"No attendance records for {course_title} yet"
+                raise HTTPException(status_code=404, detail ="No attendance records for {course_title} yet")
 
             return user_attendances
 
@@ -230,7 +230,7 @@ def user_get_attendance(
             cursor.execute(QUERY, (user["user_matric"],))
             user_attendances = cursor.fetchall()
             if not user_attendances:
-                return "No Attendance records yet"
+                raise HTTPException(status_code=404, detail = "No Attendance records yet") 
 
             return user_attendances
 
@@ -258,7 +258,7 @@ def get_geofences(
         geofences = cursor.fetchall()
 
     if not geofences:
-        return "No geofences found"
+        raise HTTPException(status_code=404, detail="No geofences found")
 
     return {"geofences": geofences}
 
