@@ -71,7 +71,7 @@ async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRe
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db_tuple: db_dependency
 ):
-    db, cursor = db_tuple
+    _, cursor = db_tuple
 
     userQuery = "SELECT * FROM Users WHERE email = %s"
 

@@ -160,7 +160,7 @@ def get_attedance(
             detail="Geofence not found for the specified course and date. No records",
         )
 
-    if geofence["creator"] != user["username"]:
+    if geofence["creator_matric"] != user["user_matric"]:
         raise HTTPException(
             status_code=401,
             detail="No permission to view this class attendances, as you're not the creator of the geofence",
@@ -242,7 +242,7 @@ def user_get_attendance(
 @app.get("/get_geofences/")
 def get_geofences(
     db_tuple: db_dependency,
-    user: general_user,
+    _: general_user,
     course_title: Optional[str] = None,
 ):
     """Gets all the active geofences.
@@ -288,11 +288,11 @@ def create_geofence(
     try:
         code = generate_alphanumeric_code()
         cursor.execute(
-            "INSERT INTO Geofences (fence_code, name, creator, latitude, longitude, radius, fence_type, start_time, end_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO Geofences (fence_code, name, creator_matric, latitude, longitude, radius, fence_type, start_time, end_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 code,
                 geofence.name,
-                user["username"],
+                user["user_matric"],
                 geofence.latitude,
                 geofence.longitude,
                 geofence.radius,
@@ -338,7 +338,7 @@ def manual_geofence(
         if geofence["status"] == "inactive":
             raise HTTPException(status_code=400, detail="Geofence is already inactive")
 
-        if user["username"] != geofence["creator"]:
+        if user["user_matric"] != geofence["creator_matric"]:
             raise HTTPException(
                 status_code=401,
                 detail="You don't have permission to delete this class as you are not the creator.",
