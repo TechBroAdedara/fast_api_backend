@@ -14,7 +14,7 @@ class GeofenceCreate(BaseModel):
     end_time: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
@@ -24,7 +24,7 @@ class CreateUserRequest(BaseModel):
     role: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str
