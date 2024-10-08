@@ -4,9 +4,8 @@ import random
 import string
 from datetime import datetime
 import os
-from typing import Annotated, Generator, Tuple, Optional
+from typing import Annotated, Tuple, Optional
 
-import mysql.connector
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
@@ -20,10 +19,23 @@ from passlib.context import CryptContext
 import auth.auth as auth
 from auth.auth import get_current_admin_user, get_current_student_user, get_current_user
 from auth.schemas import GeofenceCreate
-from database.database_connection import get_db
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+from database.database import SessionLocal
+from database.models import User, Geofence, AttendanceRecord
+
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
+
+
+def get_db():
+    db = SessionLocal()  # Create a new session
+    try:
+        yield db  # Yield the session to be used
+    finally:
+        db.close()  # Close the session when done
 
 
 # ----------------------------------------Geolocation Logic/Algorithm--------------------------------------------
@@ -75,7 +87,7 @@ app.include_router(auth.router)
 
 
 # ----------------------------------------Dependencies--------------------------------------------
-db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
+db_dependency = Annotated[Session, Depends(get_db)]
 admin_dependency = Annotated[dict, Depends(get_current_admin_user)]
 student_dependency = Annotated[dict, Depends(get_current_student_user)]
 general_user = Annotated[dict, Depends(get_current_user)]
@@ -95,95 +107,92 @@ def index():
 
 # ---------------------------- Endpoint to get the list of users
 @app.get("/user/")
-def get_user(user_matric: str, db_tuple: db_dependency, _: admin_dependency):
-    """Get the user and their records from the database.
-    Record includes: User Matric, User's full name, User's role, Users Attendance Records, and the timestamp of each attendance record.
-    """
+def get_user(user_matric: str, db: db_dependency, _: admin_dependency):
+    """Get the user and their records from the database."""
     try:
-        _, cursor = db_tuple
-        QUERY = """
-                SELECT Users.user_matric, Users.username, Users.role,AttendanceRecords.geofence_name, AttendanceRecords.timestamp 
-                FROM Users 
-                LEFT JOIN AttendanceRecords 
-                ON Users.user_matric = AttendanceRecords.user_matric 
-                WHERE Users.user_matric = %s
-                """
-        cursor.execute(QUERY, (user_matric,))
+        user_records = (
+            db.query(
+                User.user_matric,
+                User.username,
+                User.role,
+                AttendanceRecord.geofence_name,
+                AttendanceRecord.timestamp,
+            )
+            .outerjoin(
+                AttendanceRecord, User.user_matric == AttendanceRecord.user_matric
+            )
+            .filter(User.user_matric == user_matric)
+            .all()
+        )
 
-        rows = cursor.fetchall()
-        if not rows:
+        if not user_records:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Extract user details and attendance records
         attendances = [
             {
-                "Class name": row["geofence_name"],
-                "Attendance timestamp": row["timestamp"],
+                "Class name": geofence_name,
+                "Attendance timestamp": timestamp,
             }
-            for row in rows
-            if row["geofence_name"] is not None and row["timestamp"] is not None
+            for user_matric, username, role, geofence_name, timestamp in user_records
+            if geofence_name is not None and timestamp is not None
         ]
 
+        # Assuming user_records will have at least one record
         record = {
-            "user_matric": rows[0]["user_matric"],
-            "username": rows[0]["username"],
-            "role": rows[0]["role"],
-            "Attendances ": attendances,
+            "user_matric": user_records[0][0],  # user_matric
+            "username": user_records[0][1],  # username
+            "role": user_records[0][2],  # role
+            "Attendances": attendances,
         }
+
         return record
+
     except Exception as e:
-        ic(e)
+        print(e)  # Use logging instead of print for production
         raise HTTPException(
-            status_code=500, detail="Database Error: Contact Administrator"
+            status_code=500,
+            detail="Internal Error: Contact Administrator (This wasn't even supposed to happen lol)",
         )
 
 
 # ---------------------------- Endpoint to list all attendance records
 @app.get("/get_attendance/")
 def get_attedance(
-    course_title: str, date: datetime, db_tuple: db_dependency, user: admin_dependency
+    course_title: str, date: datetime, db: db_dependency, user: admin_dependency
 ):
     """Gets the attendace record for a given course.
     User can only see the records if they created the class.
     """
-    _, cursor = db_tuple
-    cursor.execute(
-        " SELECT * FROM Geofences WHERE name = %s and DATE(start_time) = %s",
-        (
-            course_title,
-            date,
-        ),
+    geofence_exists = (
+        db.query(Geofence)
+        .filter(Geofence.name == course_title, func.date(Geofence.start_time) == date)
+        .first()
     )
-    geofence = cursor.fetchone()
-    if not geofence:
+
+    if not geofence_exists:
         raise HTTPException(
             status_code=404,
-            detail="Geofence not found for the specified course and date. No records",
+            detail="Geofence doesn't exist for specified course and date. No records",
         )
 
-    if geofence["creator_matric"] != user["user_matric"]:
+    if geofence_exists.creator_matric != user["user_matric"]:
         raise HTTPException(
             status_code=401,
             detail="No permission to view this class attendances, as you're not the creator of the geofence",
         )
 
-    QUERY = """
-            SELECT Users.username, AttendanceRecords.user_matric, AttendanceRecords.timestamp 
-            FROM AttendanceRecords
-            INNER JOIN Users
-            ON AttendanceRecords.user_matric = Users.user_matric
-            WHERE geofence_name = %s AND DATE(timestamp) = %s 
-            """
-    cursor.execute(
-        QUERY,
-        (
-            course_title,
-            date,
-        ),
+    attendances = (
+        db.query(
+            User.username, AttendanceRecord.user_matric, AttendanceRecord.timestamp
+        )
+        .join(AttendanceRecord.user_matric == User.user_matric)
+        .filter(AttendanceRecord.geofence_name == course_title, func.date(AttendanceRecord.timestamp) == date)
+        .all()
     )
-    attendances = cursor.fetchall()
 
     if not attendances:
-        raise HTTPException(status_code=404, detail ="No attendance records yet")
+        raise HTTPException(status_code=404, detail="No attendance records yet")
 
     return {f"{course_title} attendance records": attendances}
 
@@ -220,7 +229,10 @@ def user_get_attendance(
             )
             user_attendances = cursor.fetchall()
             if not user_attendances:
-                raise HTTPException(status_code=404, detail ="No attendance records for {course_title} yet")
+                raise HTTPException(
+                    status_code=404,
+                    detail="No attendance records for {course_title} yet",
+                )
 
             return user_attendances
 
@@ -230,7 +242,7 @@ def user_get_attendance(
             cursor.execute(QUERY, (user["user_matric"],))
             user_attendances = cursor.fetchall()
             if not user_attendances:
-                raise HTTPException(status_code=404, detail = "No Attendance records yet") 
+                raise HTTPException(status_code=404, detail="No Attendance records yet")
 
             return user_attendances
 

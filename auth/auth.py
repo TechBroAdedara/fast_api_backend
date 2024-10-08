@@ -13,11 +13,22 @@ from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
 from pydantic import EmailStr
 from starlette import status
-from database.database_connection import get_db
 from auth.schemas import CreateUserRequest, Token, TokenData
+
+from sqlalchemy.orm import Session
+from database.database import SessionLocal
+from database.models import User, Geofence, AttendanceRecord
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
+
+
+def get_db():
+    db = SessionLocal()  # Create a new session
+    try:
+        yield db  # Yield the session to be used
+    finally:
+        db.close()  # Close the session when done
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,33 +40,35 @@ bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token/")
 
 
-db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
+db_dependency = Annotated[Session, Depends(get_db)]
 
-
+#--------------------------------------------------------------------------------------
 @router.post("/create_user/", status_code=status.HTTP_201_CREATED)
-async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRequest):
-    db, cursor = db_tuple
-    hashed_password = bcrypt_context.hash(create_user_request.password)
-    query = """
-    INSERT INTO Users (email, user_matric, username, hashed_password, role) VALUES (%s, %s, %s, %s, %s)
-    """
+async def create_user(db: db_dependency, new_user: CreateUserRequest):
+
+    hashed_password = bcrypt_context.hash(new_user.password)
+
     try:
-        cursor.execute(
-            query,
-            (
-                create_user_request.email,
-                create_user_request.user_matric,
-                create_user_request.username,
-                hashed_password,
-                create_user_request.role.lower(),
-            ),
+        existing_user = db.query(User).filter(User.user_matric == new_user.user_matric).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ID number/Email account already exists. Login?",
+            )
+
+        new_user = User(
+            email = new_user.email,
+            user_matric = new_user.user_matric,
+            username = new_user.username,
+            hashed_password = hashed_password,
+            role = new_user.role.lower(),
         )
+
+        db.add(new_user)
         db.commit()
-    except IntegrityError as f:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ID number/Email account already exists. Login?",
-        )
+        db.refresh(new_user)
+
+        return {"message": "User created successfully"}    
     except Exception as e:
         # Capture any other generic exceptions for better error handling
         logging.error(f"General error: {e}")
@@ -64,47 +77,40 @@ async def create_user(db_tuple: db_dependency, create_user_request: CreateUserRe
             detail="An unexpected error occurred",
         )
 
-    return {"message": "User created successfully"}
-
 
 @router.post("/token/", response_model=Token)
 async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db_tuple: db_dependency
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency
 ):
-    _, cursor = db_tuple
 
-    userQuery = "SELECT * FROM Users WHERE email = %s"
+    existing_user = db.query(User).filter(User.email == form_data.username).first()
 
-    cursor.execute(userQuery, (form_data.username,))
-    userCheck = cursor.fetchone()
-
-    if not userCheck:
+    if not existing_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not registered yet"
         )
 
-    user = authenticate_user(form_data.username, form_data.password, cursor)
-    if not user:
+    authenticated_user = authenticate_user(form_data.username, form_data.password, db)
+    if not authenticated_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email or password incorrect",
         )
 
     token = create_access_token(
-        user["email"],
-        user["username"],
-        user["role"],
-        user["user_matric"],
+        authenticated_user.email,
+        authenticated_user.username,
+        authenticated_user.role,
+        authenticated_user.user_matric,
         timedelta(minutes=20),
     )
     return {"access_token": token, "token_type": "bearer"}
 
 
-def authenticate_user(email: EmailStr, password: str, cursor: MySQLCursorDict):
-    query = "SELECT * FROM Users WHERE email = %s"
-    cursor.execute(query, (email,))
-    user = cursor.fetchone()
-    if not bcrypt_context.verify(password, user["hashed_password"]):
+def authenticate_user(email: EmailStr, password: str, db):
+    user = db.query(User).filter(User.email == email).first()
+
+    if not bcrypt_context.verify(password, user.hashed_password):
         return False
     return user
 
