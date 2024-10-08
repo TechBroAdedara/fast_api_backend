@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from typing import Annotated, Tuple
 
-import mysql.connector
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -12,10 +11,10 @@ from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor import MySQLCursorDict
 from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
 from starlette import status
-from database_connection import get_db
-from schemas import CreateUserRequest, Token, TokenData
+from database.database_connection import get_db
+from auth.schemas import CreateUserRequest, Token, TokenData
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
@@ -28,9 +27,6 @@ ALGORITHM = "HS256"
 
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token/")
-
-
-
 
 
 db_dependency = Annotated[Tuple[MySQLConnection, MySQLCursorDict], Depends(get_db)]
@@ -120,15 +116,15 @@ def create_access_token(
     user_matric: str,
     expires_delta: timedelta,
 ):
-    encode = {
+    data_to_encode = {
         "sub": email,
         "username": username,
         "role": role,
         "user_matric": user_matric,
     }
     expires = datetime.utcnow() + expires_delta
-    encode.update({"exp": expires})
-    return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
+    data_to_encode.update({"exp": expires})
+    return jwt.encode(data_to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str):

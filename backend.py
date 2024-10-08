@@ -17,10 +17,10 @@ from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor import MySQLCursorDict
 from passlib.context import CryptContext
 
-import auth
-from auth import get_current_admin_user, get_current_student_user, get_current_user
-from schemas import GeofenceCreate
-from database_connection import get_db
+import auth.auth as auth
+from auth.auth import get_current_admin_user, get_current_student_user, get_current_user
+from auth.schemas import GeofenceCreate
+from database.database_connection import get_db
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
