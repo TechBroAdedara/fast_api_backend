@@ -149,7 +149,7 @@ def get_user(user_matric: str, db: db_dependency, _: admin_dependency):
         return record
 
     except Exception as e:
-        print(e)  # Use logging instead of print for production
+        errors.logging(e)  
         raise HTTPException(
             status_code=500,
             detail="Internal Error: Contact Administrator (This wasn't even supposed to happen lol)",
@@ -166,9 +166,12 @@ def get_attedance(
     """
     geofence_exists = (
         db.query(Geofence)
-        .filter(Geofence.name == course_title, func.date(Geofence.start_time) == date.date())
+        .filter(
+            Geofence.name == course_title, func.date(Geofence.start_time) == date.date()
+        )
         .first()
     )
+
     if not geofence_exists:
         raise HTTPException(
             status_code=404,
@@ -180,12 +183,12 @@ def get_attedance(
             status_code=401,
             detail="No permission to view this class attendances, as you're not the creator of the geofence",
         )
-
+    
     attendances = (
         db.query(
             User.username, AttendanceRecord.user_matric, AttendanceRecord.timestamp
         )
-        .join(AttendanceRecord.user_matric == User.user_matric)
+        .join(User, AttendanceRecord.user_matric == User.user_matric)
         .filter(
             AttendanceRecord.geofence_name == course_title,
             func.date(AttendanceRecord.timestamp) == date,
@@ -210,48 +213,47 @@ def user_get_attendance(
     If no class is specified, returns all records of the student.
     if specified, returns all records of the student for the particular class.
     """
-    try:
+    # when a user provides a geofence/course name
+    if course_title is not None:
+        course_exist = (
+            db.query(Geofence).filter(Geofence.name == course_title).all()
+        )
 
-        # when a user provides a geofence/course name
-        if course_title is not None:
-            course_exist = (
-                db.query(Geofence).filter(Geofence.name == course_title).all()
+        if not course_exist:
+            raise HTTPException(status_code=404, detail="Geofence Not found")
+
+        user_attendances = (
+            db.query(AttendanceRecord)
+            .filter(
+                AttendanceRecord.user_matric == user["user_matric"],
+                AttendanceRecord.geofence_name == course_title,
+            )
+            .all()
+        )
+        if not user_attendances:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No attendance records for {course_title} yet",
             )
 
-            if not course_exist:
-                raise HTTPException(status_code=404, detail="Geofence Not found")
+        return user_attendances
 
-            user_attendances = (
-                db.query(AttendanceRecord)
-                .filter(
-                    AttendanceRecord.user_matric == user["user_matric"],
-                    AttendanceRecord.geofence_name == course_title,
-                )
-                .all()
-            )
-            if not user_attendances:
-                raise HTTPException(
-                    status_code=404,
-                    detail="No attendance records for {course_title} yet",
-                )
+    else:
+        # when the user doesn't specify a course_title
+        user_attendances = (
+            db.query(AttendanceRecord)
+            .filter(AttendanceRecord.user_matric == user["user_matric"])
+            .all()
+        )
+        if not user_attendances:
+            raise HTTPException(status_code=404, detail="No Attendance records yet")
 
-            return user_attendances
+        return user_attendances
 
-        else:
-            # when the user doesn't specify a course_title
-            user_attendances = (
-                db.query(AttendanceRecord)
-                .filter(AttendanceRecord.user_matric == user["user_matric"])
-                .all()
-            )
-            if not user_attendances:
-                raise HTTPException(status_code=404, detail="No Attendance records yet")
-
-            return user_attendances
-
-    except Exception as e:
-        logging.error(e)
-        raise HTTPException(status_code=500, detail=f"Internal error, please try again")
+    # except Exception as e:
+    #     # logging.error(e)
+    #     print(e)
+    #     raise HTTPException(status_code=500, detail=f"Internal error, please try again")
 
 
 # ---------------------------- Endpoint to get a list of Geofences
@@ -316,16 +318,15 @@ def create_geofence(
 
         return {"Code": code, "name": geofence.name}
     except errors.IntegrityError as e:
+        errors.logging(e)
         if e.errno == 1062:  # Duplicate entry error code
             raise HTTPException(
                 status_code=400, detail="Geofence with this code already exists"
             )
-
-    except Exception as f:
-        logging.error(f)
-        raise HTTPException(
-            status_code=500, detail="Internal error. Please try again..."
-        )
+        else:
+            raise HTTPException(
+                status_code=500, detail="Internal error. Please try again..."
+            )
 
 
 # ---------------------------- Endpoint to manually deactivate geofence
@@ -334,49 +335,49 @@ def manual_deactivate_geofence(
     geofence_name: str, date: datetime, db: db_dependency, user: admin_dependency
 ):
     """Manually deactivates the Geofence for the admin."""
-    try:
-        # Check if geofence exists
-        geofence = (
-            db.query(Geofence)
-            .filter(
-                Geofence.name == geofence_name, func.date(Geofence.start_time) == date
-            )
-            .first()
+    
+    # Check if geofence exists
+    geofence = (
+        db.query(Geofence)
+        .filter(
+            Geofence.name == geofence_name, func.date(Geofence.start_time) == date
         )
+        .first()
+    )
 
-        if geofence:
-            if geofence.status == "inactive":
-                raise HTTPException(
-                    status_code=400, detail="Geofence is already inactive"
-                )
-
-            if user["user_matric"] != geofence.creator_matric:
-                raise HTTPException(
-                    status_code=401,
-                    detail="You don't have permission to delete this class as you are not the creator.",
-                )
-
-            # Update if all checks passed
-            geofence.status = "inactive"
-
-            db.commit()
-            db.refresh(geofence)
-
-            return f"Successfully deactivated geofence {geofence_name} for {date} "
-
-        else:
+    if geofence:
+        if geofence.status == "inactive":
             raise HTTPException(
-                status_code=404,
-                detail="Geofence doesn't exist or not found for specified date",
+                status_code=400, detail="Geofence is already inactive"
             )
 
-    except Exception as e:
-        # Handle exceptions
-        logging.error(f"Error deactivating geofence: {e}")
+        if user["user_matric"] != geofence.creator_matric:
+            raise HTTPException(
+                status_code=401,
+                detail="You don't have permission to delete this class as you are not the creator.",
+            )
+
+        # Update if all checks passed
+        geofence.status = "inactive"
+
+        db.commit()
+        db.refresh(geofence)
+
+        return f"Successfully deactivated geofence {geofence_name} for {date} "
+
+    else:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error deactivating geofence. Please try again or contact admin.",
+            status_code=404,
+            detail="Geofence doesn't exist or not found for specified date",
         )
+
+    # except Exception as e:
+    #     # Handle exceptions
+    #     logging.error(f"Error deactivating geofence: {e}")
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail=f"Error deactivating geofence. Please try again or contact admin.",
+    #     )
 
 
 # ---------------------------- Endpoint to validate user attendance and store in database
@@ -441,20 +442,16 @@ def validate_attendance(
 
     except errors.IntegrityError as e:
         if e.errno == 1062:
+            errors.logging(e)
             raise HTTPException(
                 status_code=400,
                 detail="User has already signed attendance for this class",
             )
         else:
-            print(e)
-            raise HTTPException(status_code=500, detail=f"An error occured")
+            errors.logging(e)
+            raise HTTPException(status_code=500, detail=f"An error occured. Please retry")
 
-    except Exception as f:
-        print(f)
-        errors.logging(f)
-        raise HTTPException(
-            status_code=500, detail=f"Internal Error. Contact administrator."
-        )
+    
 
 
 if __name__ == "__main__":
