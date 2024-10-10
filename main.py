@@ -337,7 +337,7 @@ def create_geofence(
                 detail="Invalid duration for geofence. Please adjust duration and try again.",
             )
 
-        if geofence.end_time < datetime.now(pytz.utc).replace(tzinfo=None):
+        if geofence.end_time < datetime.now(pytz.utc):
             raise HTTPException(
                 status_code=400, detail="End time cannot be in the past."
             )
