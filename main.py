@@ -311,6 +311,7 @@ def create_geofence(
     geofence: GeofenceCreate, user: admin_dependency, db: db_dependency
 ):
     """Creates a Geofence with a specific start_time and end_time."""
+
     db_geofence = (
         db.query(Geofence)
         .filter(
@@ -325,19 +326,20 @@ def create_geofence(
             status_code=400,
             detail="Geofence with this name already exists for today",
         )
-
+    
+    import pytz
     try:
-        import pytz
+        start = geofence.start_time.replace(tzinfo=pytz.utc)
+        end = geofence.end_time.replace(tzinfo=pytz.utc)
 
         code = generate_alphanumeric_code()
 
-        if geofence.start_time >= geofence.end_time:
+        if start >= end:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid duration for geofence. Please adjust duration and try again.",
             )
-
-        if geofence.end_time < datetime.now(pytz.utc):
+        if end < datetime.now(pytz.utc):
             raise HTTPException(
                 status_code=400, detail="End time cannot be in the past."
             )
@@ -354,7 +356,7 @@ def create_geofence(
             end_time=geofence.end_time,
             status=(
                 "active"
-                if geofence.start_time <= datetime.now(pytz.utc) <= geofence.end_time
+                if start <= datetime.now(pytz.utc) <= end
                 else "scheduled"
             ),
             time_created=datetime.now(pytz.utc),
