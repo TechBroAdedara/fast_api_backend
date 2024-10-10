@@ -149,7 +149,7 @@ def get_user(user_matric: str, db: db_dependency, _: admin_dependency):
         return record
 
     except Exception as e:
-        errors.logging(e)  
+        errors.logging(e)
         raise HTTPException(
             status_code=500,
             detail="Internal Error: Contact Administrator (This wasn't even supposed to happen lol)",
@@ -183,7 +183,7 @@ def get_attedance(
             status_code=401,
             detail="No permission to view this class attendances, as you're not the creator of the geofence",
         )
-    
+
     attendances = (
         db.query(
             User.username, AttendanceRecord.user_matric, AttendanceRecord.timestamp
@@ -215,9 +215,7 @@ def user_get_attendance(
     """
     # when a user provides a geofence/course name
     if course_title is not None:
-        course_exist = (
-            db.query(Geofence).filter(Geofence.name == course_title).all()
-        )
+        course_exist = db.query(Geofence).filter(Geofence.name == course_title).all()
 
         if not course_exist:
             raise HTTPException(status_code=404, detail="Geofence Not found")
@@ -278,6 +276,35 @@ def get_geofences(
     return {"geofences": geofences}
 
 
+@app.get("/get_my_geofences_created")
+def get_my_geofences_created(
+    user: admin_dependency, db: db_dependency, course_title: Optional[str] = None
+):
+    """Gets the geofences created by user requesting from this endpoint."""
+    if course_title is not None:
+        geofence = (
+            db.query(Geofence)
+            .filter(
+                Geofence.name == course_title,
+                Geofence.creator_matric == user["user_matric"],
+            )
+            .all()
+        )
+    else:
+        geofence = (
+            db.query(Geofence)
+            .filter(Geofence.creator_matric == user["user_matric"])
+            .all()
+        )
+
+    if not geofence:
+        raise HTTPException(
+            status_code=404, detail="No geofences has been created by you yet"
+        )
+
+    return geofence
+
+
 # ---------------------------- Endpoint to create Geofence
 @app.post("/create_geofences/")
 def create_geofence(
@@ -300,7 +327,21 @@ def create_geofence(
         )
 
     try:
+        import pytz
+
         code = generate_alphanumeric_code()
+
+        if geofence.start_time >= geofence.end_time:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid duration for geofence. Please adjust duration and try again.",
+            )
+
+        if geofence.end_time < datetime.now(pytz.utc):
+            raise HTTPException(
+                status_code=400, detail="End time cannot be in the past."
+            )
+
         new_geofence = Geofence(
             fence_code=code,
             name=geofence.name,
@@ -311,12 +352,20 @@ def create_geofence(
             fence_type=geofence.fence_type,
             start_time=geofence.start_time,
             end_time=geofence.end_time,
+            status=(
+                "active"
+                if geofence.start_time <= datetime.now(pytz.utc) <= geofence.end_time
+                else "scheduled"
+            ),
+            time_created=datetime.now(pytz.utc),
         )
+
         db.add(new_geofence)
         db.commit()
         db.refresh(new_geofence)
 
         return {"Code": code, "name": geofence.name}
+
     except errors.IntegrityError as e:
         errors.logging(e)
         if e.errno == 1062:  # Duplicate entry error code
@@ -335,21 +384,17 @@ def manual_deactivate_geofence(
     geofence_name: str, date: datetime, db: db_dependency, user: admin_dependency
 ):
     """Manually deactivates the Geofence for the admin."""
-    
+
     # Check if geofence exists
     geofence = (
         db.query(Geofence)
-        .filter(
-            Geofence.name == geofence_name, func.date(Geofence.start_time) == date
-        )
+        .filter(Geofence.name == geofence_name, func.date(Geofence.start_time) == date)
         .first()
     )
 
     if geofence:
         if geofence.status == "inactive":
-            raise HTTPException(
-                status_code=400, detail="Geofence is already inactive"
-            )
+            raise HTTPException(status_code=400, detail="Geofence is already inactive")
 
         if user["user_matric"] != geofence.creator_matric:
             raise HTTPException(
@@ -449,9 +494,9 @@ def validate_attendance(
             )
         else:
             errors.logging(e)
-            raise HTTPException(status_code=500, detail=f"An error occured. Please retry")
-
-    
+            raise HTTPException(
+                status_code=500, detail=f"An error occured. Please retry"
+            )
 
 
 if __name__ == "__main__":

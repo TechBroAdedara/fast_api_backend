@@ -29,7 +29,8 @@ class Geofence(Base):
     start_time = Column(DateTime)
     end_time = Column(DateTime)
     status = Column(String(60))
-
+    time_created = Column(DateTime)
+    
     #foreign key
     creator_matric = Column(String(50), ForeignKey("Users.user_matric"))
 
