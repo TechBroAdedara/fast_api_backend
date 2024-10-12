@@ -13,8 +13,10 @@ from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
 from pydantic import EmailStr
 from starlette import status
+from sqlalchemy.exc import IntegrityError
 from auth.schemas import CreateUserRequest, Token, TokenData
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from database.database import SessionLocal
 from database.models import User, Geofence, AttendanceRecord
@@ -42,39 +44,49 @@ oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token/")
 
 db_dependency = Annotated[Session, Depends(get_db)]
 
-#--------------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------------
 @router.post("/create_user/", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, new_user: CreateUserRequest):
 
     hashed_password = bcrypt_context.hash(new_user.password)
-
-    try:
-        existing_user = db.query(User).filter(User.user_matric == new_user.user_matric).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="ID number/Email account already exists. Login?",
+    existing_user = (
+        db.query(User)
+        .filter(
+            or_(
+                User.user_matric == new_user.user_matric,
+                User.email == new_user.email,
             )
+        )
+        .first()
+    )
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ID number/Email account already exists. Login?",
+        )
+    try:
 
         new_user = User(
-            email = new_user.email,
-            user_matric = new_user.user_matric,
-            username = new_user.username,
-            hashed_password = hashed_password,
-            role = new_user.role.lower(),
+            email=new_user.email,
+            user_matric=new_user.user_matric,
+            username=new_user.username,
+            hashed_password=hashed_password,
+            role=new_user.role.lower(),
         )
 
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
 
-        return {"message": "User created successfully"}    
+        return {"message": "User created successfully"}
     except Exception as e:
+        db.rollback()
         # Capture any other generic exceptions for better error handling
         logging.error(f"General error: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Internal error. Please try again or contact admin.",
         )
 
 

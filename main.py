@@ -326,8 +326,9 @@ def create_geofence(
             status_code=400,
             detail="Geofence with this name already exists for today",
         )
-    
+
     import pytz
+
     try:
         start = geofence.start_time.replace(tzinfo=pytz.utc)
         end = geofence.end_time.replace(tzinfo=pytz.utc)
@@ -355,9 +356,7 @@ def create_geofence(
             start_time=geofence.start_time,
             end_time=geofence.end_time,
             status=(
-                "active"
-                if start <= datetime.now(pytz.utc) <= end
-                else "scheduled"
+                "active" if start <= datetime.now(pytz.utc) <= end else "scheduled"
             ),
             time_created=datetime.now(pytz.utc),
         )
