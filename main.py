@@ -6,14 +6,12 @@ from datetime import datetime
 import os
 from typing import Annotated, Tuple, Optional
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from icecream import ic
 from mysql.connector import errors
-from mysql.connector.connection import MySQLConnection
-from mysql.connector.cursor import MySQLCursorDict
+
 from passlib.context import CryptContext
 
 import auth.auth as auth
@@ -459,7 +457,7 @@ def validate_attendance(
             geofence.status.lower() == "active"
         ):  # Proceed to check if user is in geofence and record attendance
             if check_user_in_circular_geofence(lat, long, geofence):
-                matric_fence_code = db_user["user_matric"] + geofence["fence_code"]
+                matric_fence_code = db_user.user_matric + geofence.fence_code
 
                 new_attendance = AttendanceRecord(
                     user_matric=db_user.user_matric,
