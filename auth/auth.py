@@ -95,7 +95,15 @@ async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency
 ):
 
-    existing_user = db.query(User).filter(User.email == form_data.username).first()
+    existing_user = (
+        db.query(User)
+        .filter(
+            or_(
+                User.email == form_data.username, User.user_matric == form_data.username
+            )
+        )
+        .first()
+    )
 
     if not existing_user:
         raise HTTPException(
@@ -119,8 +127,12 @@ async def login_for_access_token(
     return {"access_token": token, "token_type": "bearer"}
 
 
-def authenticate_user(email: EmailStr, password: str, db):
-    user = db.query(User).filter(User.email == email).first()
+def authenticate_user(user_pass, password: str, db):
+    user = (
+        db.query(User)
+        .filter(or_(User.email == user_pass, User.user_matric == user_pass))
+        .first()
+    )
 
     if not bcrypt_context.verify(password, user.hashed_password):
         return False
