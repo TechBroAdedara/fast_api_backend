@@ -5,6 +5,7 @@ import string
 from datetime import datetime
 import os
 from typing import Annotated, Tuple, Optional
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
@@ -15,13 +16,17 @@ from mysql.connector import errors
 from passlib.context import CryptContext
 
 import app.api.auth as auth
-from app.api.auth import get_current_admin_user, get_current_student_user, get_current_user
+from app.api.auth import (
+    get_current_admin_user,
+    get_current_student_user,
+    get_current_user,
+)
 from app.schemas.geofence import GeofenceCreate
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database.session import SessionLocal
-from app.models.user import User 
+from app.models.user import User
 from app.models.geofence import Geofence
 from app.models.attendanceRecord import AttendanceRecord
 
@@ -312,16 +317,14 @@ def create_geofence(
 ):
     """Creates a Geofence with a specific start_time and end_time."""
     import pytz
+
     # Define the WAT timezone
-    wat_tz = pytz.timezone("Africa/Lagos")
 
     # Convert frontend input (assumed to be in WAT) to UTC
-    start_time_wat = geofence.start_time.replace(tzinfo=wat_tz)
-    end_time_wat = geofence.end_time.replace(tzinfo=wat_tz)
 
     # Convert WAT time to UTC
-    start_time_utc = start_time_wat.astimezone(pytz.utc)
-    end_time_utc = end_time_wat.astimezone(pytz.utc)
+    start_time_utc = geofence.start_time.astimezone(ZoneInfo("UTC"))
+    end_time_utc = geofence.end_time.astimezone(ZoneInfo("UTC"))
 
     # Check if a geofence with the same name and date exists
     db_geofence = (
@@ -348,7 +351,7 @@ def create_geofence(
             )
 
         # Ensure that the end time is not in the past
-        if end_time_utc < datetime.now(pytz.utc):
+        if end_time_utc < datetime.now(ZoneInfo("UTC")):
             raise HTTPException(
                 status_code=400, detail="End time cannot be in the past."
             )
@@ -366,17 +369,18 @@ def create_geofence(
             radius=geofence.radius,
             fence_type=geofence.fence_type,
             start_time=start_time_utc,  # Save start time in UTC
-            end_time=end_time_utc,      # Save end time in UTC
+            end_time=end_time_utc,  # Save end time in UTC
             status=(
-                "active" if start_time_utc <= datetime.now(pytz.utc) <= end_time_utc else "scheduled"
+                "active"
+                if start_time_utc <= datetime.now(ZoneInfo("UTC")) <= end_time_utc
+                else "scheduled"
             ),
-            time_created=datetime.now(pytz.utc),
+            time_created=datetime.now(ZoneInfo("UTC")),
         )
 
         db.add(new_geofence)
         db.commit()
         db.refresh(new_geofence)
-
         return {"Code": code, "name": geofence.name}
 
     except errors.IntegrityError as e:
