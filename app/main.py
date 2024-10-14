@@ -381,6 +381,12 @@ def create_geofence(
         db.add(new_geofence)
         db.commit()
         db.refresh(new_geofence)
+        print(
+            {
+                "start_time": new_geofence.start_time,
+                "end_time": new_geofence.end_time
+            }
+        )
         return {"Code": code, "name": geofence.name}
 
     except errors.IntegrityError as e:
