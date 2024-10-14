@@ -316,16 +316,9 @@ def create_geofence(
     geofence: GeofenceCreate, user: admin_dependency, db: db_dependency
 ):
     """Creates a Geofence with a specific start_time and end_time."""
-    import pytz
 
-    # Define the WAT timezone
-
-    # Convert frontend input (assumed to be in WAT) to UTC
-
-    # Convert WAT time to UTC
-    start_time_utc = geofence.start_time.astimezone(ZoneInfo("UTC"))
-    end_time_utc = geofence.end_time.astimezone(ZoneInfo("UTC"))
-
+    start_time_utc = geofence.start_time
+    end_time_utc = geofence.end_time
     # Check if a geofence with the same name and date exists
     db_geofence = (
         db.query(Geofence)
@@ -381,11 +374,8 @@ def create_geofence(
         db.add(new_geofence)
         db.commit()
         db.refresh(new_geofence)
-        print(
-            {
-                "start_time": new_geofence.start_time,
-                "end_time": new_geofence.end_time
-            }
+        errors.logging(
+            {"start_time": new_geofence.start_time, "end_time": new_geofence.end_time}
         )
         return {"Code": code, "name": geofence.name}
 
