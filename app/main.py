@@ -278,6 +278,19 @@ def get_geofences(
     if not geofences:
         raise HTTPException(status_code=404, detail="No geofences found")
 
+    wat = ZoneInfo("Africa/Lagos")
+
+    # Convert start_time, end_time, and creation_time from UTC to WAT
+    # for geofence in geofences:
+    #     if geofence.start_time:
+    #         geofence.start_time = geofence.start_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+
+    #     if geofence.end_time:
+    #         geofence.end_time = geofence.end_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+
+    #     if geofence.time_created:
+    #         geofence.time_created = geofence.time_created.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+
     return {"geofences": geofences}
 
 
@@ -287,7 +300,7 @@ def get_my_geofences_created(
 ):
     """Gets the geofences created by user requesting from this endpoint."""
     if course_title is not None:
-        geofence = (
+        geofences = (
             db.query(Geofence)
             .filter(
                 Geofence.name == course_title,
@@ -296,18 +309,32 @@ def get_my_geofences_created(
             .all()
         )
     else:
-        geofence = (
+        geofences = (
             db.query(Geofence)
             .filter(Geofence.creator_matric == user["user_matric"])
             .all()
         )
 
-    if not geofence:
+    if not geofences:
         raise HTTPException(
             status_code=404, detail="No geofences has been created by you yet"
         )
 
-    return geofence
+    wat = ZoneInfo("Africa/Johannesburg")
+
+    # Convert start_time, end_time, and creation_time from UTC to WAT
+#     for geofence in geofences:
+#         print(geofence.start_time)
+#         # if geofence.start_time:
+#             # geofence.start_time = geofence.start_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+# # 
+#         # if geofence.end_time:
+#             # geofence.end_time = geofence.end_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+# # 
+#         # if geofence.time_created:
+#             # geofence.time_created = geofence.time_created.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+    
+    return geofences
 
 
 # ---------------------------- Endpoint to create Geofence
@@ -374,7 +401,7 @@ def create_geofence(
         db.add(new_geofence)
         db.commit()
         db.refresh(new_geofence)
-        errors.logging(
+        print(
             {"start_time": new_geofence.start_time, "end_time": new_geofence.end_time}
         )
         return {"Code": code, "name": geofence.name}
