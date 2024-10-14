@@ -26,14 +26,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Declare a base class for your ORM models
 Base = declarative_base()
 
-# Import your models here
-from database.models import User, Geofence, AttendanceRecord  # Adjust the import based on your directory structure
+def get_db():
+    db = SessionLocal()  # Create a new session
+    try:
+        yield db  # Yield the session to be used
+    finally:
+        db.close()  # Close the session when done
 
-# Create the database tables
-def create_tables():
-    Base.metadata.create_all(bind=engine)
 
-
-if __name__ == "__main__":
-    create_tables()
-    print("Tables created successfully")

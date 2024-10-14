@@ -7,30 +7,22 @@ from typing import Annotated, Tuple
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from mysql.connector.connection import MySQLConnection
-from mysql.connector.cursor import MySQLCursorDict
+
 from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
 from pydantic import EmailStr
 from starlette import status
 from sqlalchemy.exc import IntegrityError
-from auth.schemas import CreateUserRequest, Token, TokenData
+from app.schemas.user import CreateUserRequest
+from app.schemas.accessToken import Token, TokenData
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from database.database import SessionLocal
-from database.models import User, Geofence, AttendanceRecord
+from app.models.user import User
+from app.database.session import get_db
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
-
-
-def get_db():
-    db = SessionLocal()  # Create a new session
-    try:
-        yield db  # Yield the session to be used
-    finally:
-        db.close()  # Close the session when done
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])

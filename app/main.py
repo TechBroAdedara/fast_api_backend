@@ -14,14 +14,16 @@ from mysql.connector import errors
 
 from passlib.context import CryptContext
 
-import auth.auth as auth
-from auth.auth import get_current_admin_user, get_current_student_user, get_current_user
-from auth.schemas import GeofenceCreate
+import app.api.auth as auth
+from app.api.auth import get_current_admin_user, get_current_student_user, get_current_user
+from app.schemas.geofence import GeofenceCreate
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from database.database import SessionLocal
-from database.models import User, Geofence, AttendanceRecord
+from app.database.session import SessionLocal
+from app.models.user import User 
+from app.models.geofence import Geofence
+from app.models.attendanceRecord import AttendanceRecord
 
 
 if os.getenv("ENVIRONMENT") == "development":
@@ -309,12 +311,24 @@ def create_geofence(
     geofence: GeofenceCreate, user: admin_dependency, db: db_dependency
 ):
     """Creates a Geofence with a specific start_time and end_time."""
+    import pytz
+    # Define the WAT timezone
+    wat_tz = pytz.timezone("Africa/Lagos")
 
+    # Convert frontend input (assumed to be in WAT) to UTC
+    start_time_wat = geofence.start_time.replace(tzinfo=wat_tz)
+    end_time_wat = geofence.end_time.replace(tzinfo=wat_tz)
+
+    # Convert WAT time to UTC
+    start_time_utc = start_time_wat.astimezone(pytz.utc)
+    end_time_utc = end_time_wat.astimezone(pytz.utc)
+
+    # Check if a geofence with the same name and date exists
     db_geofence = (
         db.query(Geofence)
         .filter(
             Geofence.name == geofence.name,
-            func.date(Geofence.start_time) == geofence.start_time.date(),
+            func.date(Geofence.start_time) == start_time_utc.date(),
         )
         .first()
     )
@@ -325,24 +339,24 @@ def create_geofence(
             detail="Geofence with this name already exists for today",
         )
 
-    import pytz
-
     try:
-        start = geofence.start_time.replace(tzinfo=pytz.utc)
-        end = geofence.end_time.replace(tzinfo=pytz.utc)
-
-        code = generate_alphanumeric_code()
-
-        if start >= end:
+        # Check that the start time is before the end time
+        if start_time_utc >= end_time_utc:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid duration for geofence. Please adjust duration and try again.",
             )
-        if end < datetime.now(pytz.utc):
+
+        # Ensure that the end time is not in the past
+        if end_time_utc < datetime.now(pytz.utc):
             raise HTTPException(
                 status_code=400, detail="End time cannot be in the past."
             )
 
+        # Generate a unique code for the geofence
+        code = generate_alphanumeric_code()
+
+        # Create a new geofence record
         new_geofence = Geofence(
             fence_code=code,
             name=geofence.name,
@@ -351,10 +365,10 @@ def create_geofence(
             longitude=geofence.longitude,
             radius=geofence.radius,
             fence_type=geofence.fence_type,
-            start_time=geofence.start_time,
-            end_time=geofence.end_time,
+            start_time=start_time_utc,  # Save start time in UTC
+            end_time=end_time_utc,      # Save end time in UTC
             status=(
-                "active" if start <= datetime.now(pytz.utc) <= end else "scheduled"
+                "active" if start_time_utc <= datetime.now(pytz.utc) <= end_time_utc else "scheduled"
             ),
             time_created=datetime.now(pytz.utc),
         )
