@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
+
 class GeofenceCreate(BaseModel):
     name: str
     latitude: float

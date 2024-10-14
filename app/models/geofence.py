@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 
 from app.database.session import Base
 
+
 class Geofence(Base):
     __tablename__ = "Geofences"
 
@@ -13,12 +14,12 @@ class Geofence(Base):
     longitude = Column(Float)
     radius = Column(Float)
     fence_type = Column(String(60))
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
+    start_time = Column(DateTime(timezone=True))
+    end_time = Column(DateTime(timezone=True))
     status = Column(String(60))
-    time_created = Column(DateTime)
-    
-    #foreign key
+    time_created = Column(DateTime(timezone=True))
+
+    # foreign key
     creator_matric = Column(String(50), ForeignKey("Users.user_matric"))
 
     creator = relationship("User", back_populates="geofences")
