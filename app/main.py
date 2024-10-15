@@ -344,8 +344,11 @@ def create_geofence(
 ):
     """Creates a Geofence with a specific start_time and end_time."""
 
-    start_time_utc = geofence.start_time
-    end_time_utc = geofence.end_time
+    start_time = geofence.start_time.replace(tzinfo=ZoneInfo("Africa/Lagos"))
+    end_time = geofence.end_time.replace(tzinfo=ZoneInfo("Africa/Lagos"))
+    
+    start_time_utc = start_time.astimezone(ZoneInfo("UTC"))
+    end_time_utc = end_time.astimezone(ZoneInfo("UTC"))
     # Check if a geofence with the same name and date exists
     db_geofence = (
         db.query(Geofence)
@@ -397,13 +400,14 @@ def create_geofence(
             ),
             time_created=datetime.now(ZoneInfo("UTC")),
         )
-
+        print(
+            start_time, end_time
+        )
+        print(start_time_utc, end_time_utc)
         db.add(new_geofence)
         db.commit()
         db.refresh(new_geofence)
-        print(
-            {"start_time": new_geofence.start_time, "end_time": new_geofence.end_time}
-        )
+
         return {"Code": code, "name": geofence.name}
 
     except errors.IntegrityError as e:
