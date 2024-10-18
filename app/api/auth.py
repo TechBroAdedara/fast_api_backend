@@ -20,6 +20,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.database.session import get_db
+from app.utils import authenticate_user, create_access_token, decode_token
 
 if os.getenv("ENVIRONMENT") == "development":
     load_dotenv()
@@ -28,7 +29,7 @@ if os.getenv("ENVIRONMENT") == "development":
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
+ALGORITHM = os.getenv("ALGORITHM")
 
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token/")
@@ -118,62 +119,6 @@ async def login_for_access_token(
     )
     return {"access_token": token, "token_type": "bearer"}
 
-
-def authenticate_user(user_pass, password: str, db):
-    user = (
-        db.query(User)
-        .filter(or_(User.email == user_pass, User.user_matric == user_pass))
-        .first()
-    )
-
-    if not bcrypt_context.verify(password, user.hashed_password):
-        return False
-    return user
-
-
-def create_access_token(
-    email: EmailStr,
-    username: str,
-    role: str,
-    user_matric: str,
-    expires_delta: timedelta,
-):
-    data_to_encode = {
-        "sub": email,
-        "username": username,
-        "role": role,
-        "user_matric": user_matric,
-    }
-    expires = datetime.utcnow() + expires_delta
-    data_to_encode.update({"exp": expires})
-    return jwt.encode(data_to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        username = payload.get("username")
-        role = payload.get("role")
-        user_matric = payload.get("user_matric")
-
-        if not all([email, username, role, user_matric]):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate user",
-            )
-
-        return {
-            "email": email,
-            "username": username,
-            "role": role,
-            "user_matric": user_matric,
-        }
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate user.",
-        )
 
 
 def get_current_user(token: str = Depends(oauth2_bearer)):
