@@ -1,18 +1,14 @@
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from dotenv import load_dotenv
-from typing import Annotated, Tuple
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
 
-from mysql.connector.errors import IntegrityError
 from passlib.context import CryptContext
-from pydantic import EmailStr
 from starlette import status
-from sqlalchemy.exc import IntegrityError
 from app.schemas.user import CreateUserRequest
 from app.schemas.accessToken import Token, TokenData
 

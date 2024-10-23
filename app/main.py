@@ -1,10 +1,9 @@
-import logging
 import math
 import random
 import string
 from datetime import datetime
 import os
-from typing import Annotated, Tuple, Optional
+from typing import Annotated, Optional
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -139,7 +138,7 @@ def get_user(user_matric: str, db: db_dependency, _: admin_dependency):
                 "Class name": geofence_name,
                 "Attendance timestamp": timestamp,
             }
-            for user_matric, username, role, geofence_name, timestamp in user_records
+            for _, _, _, geofence_name, timestamp in user_records
             if geofence_name is not None and timestamp is not None
         ]
 
@@ -323,17 +322,17 @@ def get_my_geofences_created(
     wat = ZoneInfo("Africa/Johannesburg")
 
     # Convert start_time, end_time, and creation_time from UTC to WAT
-#     for geofence in geofences:
-#         print(geofence.start_time)
-#         # if geofence.start_time:
-#             # geofence.start_time = geofence.start_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-# # 
-#         # if geofence.end_time:
-#             # geofence.end_time = geofence.end_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-# # 
-#         # if geofence.time_created:
-#             # geofence.time_created = geofence.time_created.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-    
+    #     for geofence in geofences:
+    #         print(geofence.start_time)
+    #         # if geofence.start_time:
+    #             # geofence.start_time = geofence.start_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+    # #
+    #         # if geofence.end_time:
+    #             # geofence.end_time = geofence.end_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+    # #
+    #         # if geofence.time_created:
+    #             # geofence.time_created = geofence.time_created.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
+
     return geofences
 
 
@@ -346,7 +345,7 @@ def create_geofence(
 
     start_time = geofence.start_time.replace(tzinfo=ZoneInfo("Africa/Lagos"))
     end_time = geofence.end_time.replace(tzinfo=ZoneInfo("Africa/Lagos"))
-    
+
     start_time_utc = start_time.astimezone(ZoneInfo("UTC"))
     end_time_utc = end_time.astimezone(ZoneInfo("UTC"))
     # Check if a geofence with the same name and date exists
@@ -400,9 +399,7 @@ def create_geofence(
             ),
             time_created=datetime.now(ZoneInfo("UTC")),
         )
-        print(
-            start_time, end_time
-        )
+        print(start_time, end_time)
         print(start_time_utc, end_time_utc)
         db.add(new_geofence)
         db.commit()
@@ -501,7 +498,7 @@ def validate_attendance(
         if (
             geofence.status.lower() == "active"
         ):  # Proceed to check if user is in geofence and record attendance
-            if check_user_in_circular_geofence(lat, long, geofence):
+            if check_user_in_ circular_geofence(lat, long, geofence):
                 matric_fence_code = db_user.user_matric + geofence.fence_code
 
                 new_attendance = AttendanceRecord(
