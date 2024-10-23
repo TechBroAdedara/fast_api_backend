@@ -498,7 +498,7 @@ def validate_attendance(
         if (
             geofence.status.lower() == "active"
         ):  # Proceed to check if user is in geofence and record attendance
-            if check_user_in_ circular_geofence(lat, long, geofence):
+            if check_user_in_circular_geofence(lat, long, geofence):
                 matric_fence_code = db_user.user_matric + geofence.fence_code
 
                 new_attendance = AttendanceRecord(
