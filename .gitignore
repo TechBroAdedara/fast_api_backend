@@ -2,3 +2,4 @@ fastapi-env/
 .env
 ca.pem
 __pycache__/
+*.vscode
