@@ -277,20 +277,8 @@ def get_geofences(
     if not geofences:
         raise HTTPException(status_code=404, detail="No geofences found")
 
-    wat = ZoneInfo("Africa/Lagos")
-
-    # Convert start_time, end_time, and creation_time from UTC to WAT
-    # for geofence in geofences:
-    #     if geofence.start_time:
-    #         geofence.start_time = geofence.start_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-
-    #     if geofence.end_time:
-    #         geofence.end_time = geofence.end_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-
-    #     if geofence.time_created:
-    #         geofence.time_created = geofence.time_created.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-
-    return {"geofences": geofences}
+    geofences_ordered = geofences[::-1]
+    return {"geofences": geofences_ordered}
 
 
 @app.get("/get_my_geofences_created")
@@ -319,21 +307,9 @@ def get_my_geofences_created(
             status_code=404, detail="No geofences has been created by you yet"
         )
 
-    wat = ZoneInfo("Africa/Johannesburg")
 
-    # Convert start_time, end_time, and creation_time from UTC to WAT
-    #     for geofence in geofences:
-    #         print(geofence.start_time)
-    #         # if geofence.start_time:
-    #             # geofence.start_time = geofence.start_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-    # #
-    #         # if geofence.end_time:
-    #             # geofence.end_time = geofence.end_time.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-    # #
-    #         # if geofence.time_created:
-    #             # geofence.time_created = geofence.time_created.astimezone(wat).strftime("%Y-%m-%d %H:%M:%S")
-
-    return geofences
+    geofences_ordered = geofences[::-1]
+    return geofences_ordered
 
 
 # ---------------------------- Endpoint to create Geofence
