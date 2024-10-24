@@ -12,14 +12,14 @@ Another solution that has been tested is the use of a code given to the students
 The need to develop a foolproof system is obvious. This is where Attendance verification using Geolocation comes in. The concept is quite simple. The administrator sets up a geofence, and if a student is in that geofence for the duration of that class, his attendance is recorded for that class. The main thing that makes this method foolproof is that a student wouldn't be able to mimic his presence in that class when they are infact not in the class location. But this method needs to take into consideration the ease of use for both the student and the administrator (Lecturer for the class or the school).
 
 
-Implementation
+## Implementation
 ______________
 
 The application will be split into two places. The administrator account and the student account. 
 The implementation of the application would also be split into two phases. The backend for geolocation and geofencing services, and then the interface.
 
-Application
-
+## Application
+______________
 Administrator application: The admin would be responsible for setting the geofence for the class. They would be responsible for inputting the name for that class as well, and then informing the students that the geofence for that class is active at the moment. So students would be informed to go into the app and verify their attendance.
 
 Student application: The student would be responsible for inputing his details into the application on the time of registration (which we would get to later). The details include, for example, Student's ID, Student's Name, Student's Department and College. The students would also be responsible for responding to the prompt to verify attendance for a particular class. 
